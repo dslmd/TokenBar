@@ -1,0 +1,1 @@
+{"recorded_at":1760176800000000,"stream":{"kind":"session","id":"uuid0"},"sequence":1,"payload_type":"runtime.session","payload":{"kind":"run","event":{"kind":"model_completed","usage":{"input_tokens":100,"output_tokens":10,"cached_tokens":0},"model":"muse-spark-1.2"}}}

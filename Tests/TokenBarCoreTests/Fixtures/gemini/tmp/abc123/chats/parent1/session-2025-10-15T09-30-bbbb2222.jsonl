@@ -1,0 +1,2 @@
+{"sessionId":"sub1","projectHash":"abc123","startTime":"2025-10-15T09:30:00.000Z","lastUpdated":"2025-10-15T09:30:00.000Z","kind":"subagent"}
+{"id":"g3","timestamp":"2025-10-15T09:31:00.000Z","type":"gemini","content":"sub","tokens":{"input":100,"output":10,"cached":0,"thoughts":0,"tool":0,"total":110},"model":"gemini-2.5-flash"}

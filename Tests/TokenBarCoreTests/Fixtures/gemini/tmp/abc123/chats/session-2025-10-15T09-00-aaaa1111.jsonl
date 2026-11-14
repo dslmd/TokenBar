@@ -1,0 +1,8 @@
+{"sessionId":"sess-g1","projectHash":"abc123","startTime":"2025-10-15T09:00:00.000Z","lastUpdated":"2025-10-15T09:00:00.000Z","kind":"main"}
+{"id":"u1","timestamp":"2025-10-15T09:00:01.000Z","type":"user","content":[{"text":"hi"}]}
+{"id":"g1","timestamp":"2025-10-15T09:00:05.000Z","type":"gemini","content":"Hello","thoughts":[],"tokens":{"input":1000,"output":50,"cached":400,"thoughts":30,"tool":0,"total":1080},"model":"gemini-2.5-pro"}
+{"$set":{"lastUpdated":"2025-10-15T09:00:06.000Z"}}
+{"$patch":{"id":"g1","content":"Hello!"}}
+{"id":"g2","timestamp":"2025-10-15T09:10:00.000Z","type":"gemini","content":"More","tokens":{"input":2000,"output":100,"cached":0,"thoughts":0,"tool":20,"total":2120},"model":"gemini-2.5-flash"}
+{"id":"g1","timestamp":"2025-10-15T09:00:05.000Z","type":"gemini","content":"Hello!","tokens":{"input":1000,"output":50,"cached":400,"thoughts":30,"tool":0,"total":1080},"model":"gemini-2.5-pro"}
+{"id":"g9","type":"gemini","tokens":{"input":
