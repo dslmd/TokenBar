@@ -30,9 +30,9 @@ public struct ClaudeQuotaBackend: QuotaBackend {
             sources.append(.keychain(service: Self.keychainService))
         }
         // With CLAUDE_CONFIG_DIR set (any value, even ~/.claude), Claude Code suffixes the service with the first
-        // 8 hex chars of SHA-256 over the NFC-normalised literal variable value. This is undocumented; it is
-        // reported consistently by third-party tools (one verified /tmp/claude-alt -> "-04923786"). The literal
-        // value is unknown here, so the likely spellings are tried; a wrong guess only means "item not found".
+        // 8 hex chars of SHA-256 over the NFC-normalised literal variable value (confirmed from the Claude Code
+        // binary; /tmp/claude-alt -> "-04923786"). The stored path is tried first exactly as stored (TokenBar keeps
+        // managed sign-ins byte-identical); other likely spellings follow, and a wrong guess only means "not found".
         for c in Self.configDirSpellings(dataPath) {
             let service = "\(Self.keychainService)-\(SHA256Lite.hex(c).prefix(8))"
             if !sources.contains(.keychain(service: service)) { sources.append(.keychain(service: service)) }

@@ -27,7 +27,7 @@ struct PopoverView: View {
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        ForEach(model.registry.providers, id: \.id) { provider in
+                        ForEach(model.catalog.providers) { provider in
                             let accounts = model.enabledAccounts(for: provider.id)
                             if !accounts.isEmpty {
                                 ProviderSection(
@@ -122,17 +122,21 @@ struct EmptyState: View {
                     .font(.system(size: 34))
                     .foregroundStyle(.secondary)
                 Text("No accounts found").font(.headline)
-                Text("TokenBar looks for Claude Code, Codex, Gemini CLI and Muse Code on this Mac. Sign in to add an account.")
+                Text("TokenBar looks for Claude Code, Codex, Gemini CLI and Muse Code on this Mac. Sign in below to add an account, including Muse.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .fixedSize(horizontal: false, vertical: true)
-                ForEach(model.registry.providers, id: \.id) { provider in
+                ForEach(model.catalog.providers) { provider in
                     if model.signInUnavailableReason(provider.id) == nil {
                         Button("Sign in to \(provider.displayName)") {
                             model.startSignIn(provider.id)
-                            SettingsWindowController.shared.show(model: model)
+                            // CLI sign-ins report progress in settings; a web sign-in has its own window.
+                            if provider.capabilities.signIn == .cli {
+                                SettingsWindowController.shared.show(model: model)
+                            }
                         }
+                        .disabled(provider.capabilities.signIn == .web && model.isSigningInToMuse)
                     }
                 }
                 HStack {
@@ -149,7 +153,7 @@ struct EmptyState: View {
 
 struct ProviderSection: View {
     @EnvironmentObject var model: AppModel
-    let provider: any UsageProvider
+    let provider: ProviderInfo
     let accounts: [Account]
     let isCollapsed: Bool
     let onToggle: () -> Void
@@ -170,10 +174,12 @@ struct ProviderSection: View {
                     Label(provider.displayName, systemImage: provider.symbolName)
                         .font(.subheadline.weight(.semibold))
                     Spacer()
-                    Text("Today \(Fmt.tokens(todayTotal))")
-                        .font(.caption)
-                        .monospacedDigit()
-                        .foregroundStyle(.secondary)
+                    if provider.capabilities.localLogs {
+                        Text("Today \(Fmt.tokens(todayTotal))")
+                            .font(.caption)
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .contentShape(Rectangle())
             }
@@ -182,7 +188,11 @@ struct ProviderSection: View {
 
             if !isCollapsed {
                 ForEach(accounts) { account in
-                    AccountCard(account: account)
+                    if provider.capabilities.localLogs {
+                        AccountCard(account: account)
+                    } else {
+                        WebQuotaCard(account: account)
+                    }
                 }
             }
         }
@@ -271,6 +281,61 @@ struct AccountCard: View {
         if let issue = result?.issue, issue != .disabled, issue != .unsupported {
             StatusLine(systemImage: "exclamationmark.circle", text: issue.message)
         }
+    }
+}
+
+/// Card for an account without local logs (Muse): plan, weekly quota with reset countdown, tokens left, top-up.
+struct WebQuotaCard: View {
+    @EnvironmentObject var model: AppModel
+    let account: Account
+
+    var body: some View {
+        let state = model.webQuota[account.id]
+        let usage = state?.usage
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .firstTextBaseline) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(account.name).font(.subheadline.weight(.semibold))
+                    if let plan = usage?.planName {
+                        Text(plan).font(.caption2).foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            if !model.onlineQuotaIsOn(for: account) {
+                StatusLine(systemImage: "wifi.slash", text: "Online quota is off. Turn it on in Settings to see Muse usage.")
+            } else {
+                if let usage {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(usage.windows.enumerated()), id: \.offset) { _, window in
+                            QuotaBar(window: window)
+                        }
+                        ForEach(usage.detailLines, id: \.self) { line in
+                            Text(line).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Text("From muse.ai · \(Fmt.relative(usage.observedAt))")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                } else if state?.failure == nil {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Reading…").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+                if let failure = state?.failure {
+                    StatusLine(systemImage: "exclamationmark.circle", text: failure.message)
+                    if failure.needsSignIn {
+                        Button("Sign in again") { model.signInToMuse(replacing: account.id) }
+                            .disabled(model.isSigningInToMuse)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.primary.opacity(0.06)))
     }
 }
 

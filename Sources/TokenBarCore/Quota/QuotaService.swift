@@ -144,7 +144,9 @@ public actor QuotaService {
     }
 
     private func stores(for account: Account, backend: any QuotaBackend) -> [CredentialBlobStore] {
-        backend.credentialSources(forDataPath: expandPath(account.dataPath), home: home).compactMap { source in
+        // An absolute path is passed on unchanged: Claude's Keychain item name is derived from the literal string.
+        let path = account.dataPath.hasPrefix("~") ? expandPath(account.dataPath) : account.dataPath
+        return backend.credentialSources(forDataPath: path, home: home).compactMap { source in
             switch source {
             case .file(let url): return FileBlobStore(url: url)
             case .keychain(let service): return keychain?(service)

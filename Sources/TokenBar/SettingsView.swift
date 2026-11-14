@@ -66,7 +66,7 @@ struct AccountsTab: View {
                         NoAccountsView()
                         Divider()
                     }
-                    ForEach(model.registry.providers, id: \.id) { provider in
+                    ForEach(model.catalog.providers) { provider in
                         ProviderAccounts(provider: provider)
                         Divider()
                     }
@@ -83,7 +83,7 @@ struct NoAccountsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Label("No accounts found yet", systemImage: "person.crop.circle.badge.questionmark")
                 .font(.headline)
-            Text("If you use Claude Code, Codex or Gemini CLI, sign in below and TokenBar adds the account. Accounts you use from the terminal appear here on their own after you run the CLI once.")
+            Text("If you use Claude Code, Codex, Gemini CLI or Muse, sign in below and TokenBar adds the account. Accounts you use from the terminal appear here on their own after you run the CLI once.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -96,23 +96,34 @@ struct NoAccountsView: View {
 
 struct ProviderAccounts: View {
     @EnvironmentObject var model: AppModel
-    let provider: any UsageProvider
+    let provider: ProviderInfo
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Label(provider.displayName, systemImage: provider.symbolName)
                 .font(.headline)
+            if let note = provider.note {
+                Text(note)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             let accounts = model.accounts(for: provider.id)
             if accounts.isEmpty {
-                Text("No accounts found.")
+                Text(provider.capabilities.folderAccounts ? "No accounts found." : "No accounts yet.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
             ForEach(accounts) { account in
                 AccountRow(account: account, provider: provider)
             }
-            SignInRow(provider: provider)
-            AdvancedAddFolder(provider: provider)
+            switch provider.capabilities.signIn {
+            case .web: WebSignInRow(provider: provider)
+            case .cli, .none: SignInRow(provider: provider)
+            }
+            if provider.capabilities.folderAccounts {
+                AdvancedAddFolder(provider: provider)
+            }
         }
     }
 }
@@ -140,7 +151,10 @@ struct StatusDot: View {
 struct AccountRow: View {
     @EnvironmentObject var model: AppModel
     let account: Account
-    let provider: any UsageProvider
+    let provider: ProviderInfo
+
+    private var caps: ProviderCapabilities { provider.capabilities }
+    private var isWeb: Bool { caps.signIn == .web }
 
     @State private var confirmDelete = false
     @State private var copiedAlias = false
@@ -171,19 +185,28 @@ struct AccountRow: View {
                     .help(account.isEnabled ? "Turn off to hide this account" : "Turn on to show this account")
                 moreMenu
             }
-            if let line = Fmt.identityLine(model.identities[account.id]) {
-                Text(line).font(.caption).foregroundStyle(.secondary)
+            if caps.folderAccounts {
+                if let line = Fmt.identityLine(model.identities[account.id]) {
+                    Text(line).font(.caption).foregroundStyle(.secondary)
+                }
+                Text(Fmt.shortPath(account.dataPath))
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .help(account.dataPath)
+            } else if let plan = model.webQuota[account.id]?.usage?.planName {
+                Text("Plan: \(plan)").font(.caption).foregroundStyle(.secondary)
             }
-            Text(Fmt.shortPath(account.dataPath))
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .help(account.dataPath)
             if health == .warning || health == .error {
                 Text(healthText).font(.caption).foregroundStyle(.orange)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            if account.isEnabled && model.backendSupportsOnlineQuota(provider.id) {
+            if isWeb && account.isEnabled && MuseAIAccounts.needsSignIn(model.webQuota[account.id]) {
+                Button("Sign in again") { model.signInToMuse(replacing: account.id) }
+                    .disabled(model.isSigningInToMuse)
+            }
+            if account.isEnabled && caps.hasOnlineQuota {
                 Toggle("Online quota", isOn: Binding(
                     get: { account.onlineQuotaEnabled },
                     set: { model.setOnlineQuota(account.id, enabled: $0) }))
@@ -201,7 +224,9 @@ struct AccountRow: View {
             Button("Remove", role: .destructive) { model.removeAccount(account.id) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            if account.origin == .signedIn {
+            if isWeb {
+                Text("This deletes the muse.ai session TokenBar saved in the Keychain. Your Muse account itself is not changed.")
+            } else if account.origin == .signedIn {
                 Text("This also deletes the sign-in TokenBar created for this account. Your other CLI profiles are not touched.")
             } else {
                 Text("TokenBar will stop showing it and will not add it back automatically. No files are deleted.")
@@ -217,11 +242,17 @@ struct AccountRow: View {
                     copiedAlias = true
                 }
             }
-            Button("Show in Finder") {
-                NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: expandPath(account.dataPath))])
+            if caps.folderAccounts {
+                Button("Show in Finder") {
+                    NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: expandPath(account.dataPath))])
+                }
+                if account.origin == .manual || account.origin == nil {
+                    Button("Change folder…") { chooseFolder() }
+                }
             }
-            if account.origin == .manual || account.origin == nil {
-                Button("Change folder…") { chooseFolder() }
+            if isWeb {
+                Button("Sign in again…") { model.signInToMuse(replacing: account.id) }
+                    .disabled(model.isSigningInToMuse)
             }
             Divider()
             Button("Remove…", role: .destructive) { confirmDelete = true }
@@ -269,12 +300,13 @@ enum FolderPicker {
 
 struct SignInRow: View {
     @EnvironmentObject var model: AppModel
-    let provider: any UsageProvider
+    let provider: ProviderInfo
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             if let reason = model.signInUnavailableReason(provider.id) {
                 Text(reason).font(.caption).foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             } else {
                 let phase = model.signInPhases[provider.id]
                 switch phase {
@@ -282,6 +314,24 @@ struct SignInRow: View {
                     progress("Looking for the \(provider.displayName) command…")
                 case .waitingForUser(let hint)?:
                     progress(hint)
+                case .failed(let message)?:
+                    // Can be two lines, e.g. "not installed" with the install command to copy.
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label {
+                            Text(message)
+                                .textSelection(.enabled)
+                                .fixedSize(horizontal: false, vertical: true)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                        HStack(spacing: 8) {
+                            Button("Try again") { model.startSignIn(provider.id) }
+                            Button("Dismiss") { model.dismissSignIn(provider.id) }.buttonStyle(.borderless)
+                        }
+                        .font(.caption)
+                    }
                 default:
                     HStack(spacing: 8) {
                         Button {
@@ -316,13 +366,47 @@ struct SignInRow: View {
             Label("Signed in. The account was added.", systemImage: "checkmark.circle.fill")
                 .font(.caption).foregroundStyle(.green)
             Button("OK") { model.dismissSignIn(provider.id) }.buttonStyle(.borderless).font(.caption)
-        case .failed(let message)?:
-            Text(message).font(.caption).foregroundStyle(.orange)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            Button("Dismiss") { model.dismissSignIn(provider.id) }.buttonStyle(.borderless).font(.caption)
         default:
             EmptyView()
+        }
+    }
+}
+
+/// Sign-in for providers that use an in-app web window (Muse). Always available: no CLI is needed.
+struct WebSignInRow: View {
+    @EnvironmentObject var model: AppModel
+    let provider: ProviderInfo
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            if model.isSigningInToMuse {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text(model.museSignInAccountID == nil ? "Finish signing in in the \(provider.displayName) window."
+                                                          : "Sign in again in the \(provider.displayName) window.")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer()
+                    Button("Cancel") { model.cancelMuseSignIn() }
+                }
+            } else {
+                Button {
+                    model.startSignIn(provider.id)
+                } label: {
+                    Label("Sign in to \(provider.displayName)", systemImage: "person.badge.plus")
+                }
+            }
+            if let message = model.webSignInMessage {
+                HStack(spacing: 8) {
+                    Text(message).font(.caption).foregroundStyle(.orange)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Dismiss") { model.dismissWebSignInMessage() }.buttonStyle(.borderless).font(.caption)
+                }
+            }
+            Text("Each account signs in in its own window. The session is kept in your Keychain, and you can rename accounts above.")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -331,7 +415,7 @@ struct SignInRow: View {
 
 struct AdvancedAddFolder: View {
     @EnvironmentObject var model: AppModel
-    let provider: any UsageProvider
+    let provider: ProviderInfo
 
     @State private var expanded = false
     @State private var path = ""
@@ -340,7 +424,7 @@ struct AdvancedAddFolder: View {
     var body: some View {
         DisclosureGroup("Advanced", isExpanded: $expanded) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(provider.dataPathHint)
+                Text(provider.dataPathHint ?? "")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -407,7 +491,7 @@ struct GeneralTab: View {
                     get: { model.settings.menuBarProviderID ?? "" },
                     set: { v in model.updateSettings { $0.menuBarProviderID = v.isEmpty ? nil : v } })) {
                     Text("All providers").tag("")
-                    ForEach(model.registry.providers, id: \.id) { Text($0.displayName).tag($0.id) }
+                    ForEach(model.catalog.menuBarProviders) { Text($0.displayName).tag($0.id) }
                 }
                 Picker("Period", selection: Binding(
                     get: { model.settings.menuBarPeriod },
@@ -427,7 +511,7 @@ struct GeneralTab: View {
                 Toggle("Check quota online", isOn: Binding(
                     get: { model.settings.onlineQuotaEnabled },
                     set: { v in model.updateSettings { $0.onlineQuotaEnabled = v } }))
-                Text("When on, TokenBar reads the sign-in each CLI already saved and asks OpenAI, Anthropic and Google for your quota, at most every 5 minutes. When off, TokenBar makes no network requests and only counts local logs. You can also turn it off per account.")
+                Text("When on, TokenBar reads the sign-in each CLI already saved and asks OpenAI, Anthropic and Google for your quota, and asks muse.ai for the weekly quota of Muse accounts you signed in to here, at most every 5 minutes. When off, TokenBar makes no network requests and only counts local logs. You can also turn it off per account.")
                     .font(.caption).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

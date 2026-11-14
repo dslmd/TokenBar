@@ -112,7 +112,9 @@ public struct AccountDiscovery: Sendable {
             var seen = Set<String>()
             var found: [DiscoveredAccount] = []
             for c in candidates {
-                let path = normalizedPath(c.path, home: home)
+                // A TokenBar-managed home keeps the exact string the sign-in used (Claude Code names its
+                // Keychain item after the literal CLAUDE_CONFIG_DIR value); other paths are tidied up.
+                let path = c.managed ? c.path : normalizedPath(c.path, home: home)
                 guard path.hasPrefix("/"), rule.isHome(path, fileSystem: fs) else { continue }
                 let resolved = fs.resolvedPath(path)
                 guard seen.insert(resolved).inserted else { continue }
@@ -193,7 +195,9 @@ public enum AccountReconciler {
             a.dataPath.isEmpty || seen.insert(AccountKey.of(a, fileSystem: fs)).inserted
         }
         let dismissed = Set(config.dismissedAccounts)
-        let existing = Dictionary(config.accounts.indices.map { (AccountKey.of(config.accounts[$0], fileSystem: fs), $0) },
+        // Accounts without a folder (web sign-ins such as Muse) are never matched against detected folders.
+        let existing = Dictionary(config.accounts.indices.filter { !config.accounts[$0].dataPath.isEmpty }
+                                    .map { (AccountKey.of(config.accounts[$0], fileSystem: fs), $0) },
                                   uniquingKeysWith: { a, _ in a })
         for d in discovered {
             if let i = existing[d.key] {
@@ -223,10 +227,21 @@ public enum AccountReconciler {
     }
 
     /// Adds (or re-enables) an account for a directory. Returns the account that now represents it.
+    ///
+    /// For `.signedIn` the path is stored exactly as given (no standardising, no symlink resolution, no trailing
+    /// slash removal): Claude Code derives its Keychain item name from the literal `CLAUDE_CONFIG_DIR` string.
+    /// Matching an existing account still compares normalised, symlink-resolved forms.
     @discardableResult
     public static func add(providerID: String, dataPath raw: String, origin: AccountOrigin, name: String?,
                            to config: inout AppConfig, fileSystem fs: FileSystem) -> Account {
         let path = normalizedPath(raw, home: fs.homeDirectory)
+        guard !path.isEmpty else {
+            // No folder: never merged with another account.
+            let account = Account(providerID: providerID, name: name ?? "Account", dataPath: "", origin: origin, autoNamed: name == nil)
+            config.accounts.append(account)
+            return account
+        }
+        let stored = origin == .signedIn && raw.hasPrefix("/") ? raw : path
         let key = AccountKey.make(providerID: providerID, resolvedPath: fs.resolvedPath(path))
         config.dismissedAccounts.removeAll { $0 == key }
         if let i = config.accounts.firstIndex(where: { $0.providerID == providerID && AccountKey.of($0, fileSystem: fs) == key }) {
@@ -238,15 +253,27 @@ public enum AccountReconciler {
         let auto = name == nil
         let finalName = name ?? AccountNaming.name(for: path, providerID: providerID, identity: identity, label: nil,
                                                   managed: origin == .signedIn, home: fs.homeDirectory)
-        let account = Account(providerID: providerID, name: finalName, dataPath: path, origin: origin, autoNamed: auto)
+        let account = Account(providerID: providerID, name: finalName, dataPath: stored, origin: origin, autoNamed: auto)
+        config.accounts.append(account)
+        return account
+    }
+
+    /// Adds an account that has no folder (signed in on a website inside TokenBar, e.g. Muse). Always a new
+    /// account: several accounts of the same provider are expected, and their empty paths are never compared.
+    @discardableResult
+    public static func addWebAccount(providerID: String, name: String, to config: inout AppConfig) -> Account {
+        let account = Account(providerID: providerID, name: name, dataPath: "", origin: .signedIn, autoNamed: false)
         config.accounts.append(account)
         return account
     }
 
     /// Data path for a home directory reported by a successful managed sign-in (Gemini keeps its data in `.gemini`).
+    /// The driver's string is returned byte for byte (the driver already hands back Gemini's `.gemini` folder);
+    /// only a bare Gemini home gets the suffix appended.
     public static func dataPath(forManagedHome homePath: String, providerID: String, fileSystem fs: FileSystem) -> String {
-        let home = normalizedPath(homePath, home: fs.homeDirectory)
-        guard let suffix = ProviderHomeRule.rule(for: providerID)?.managedSuffix, !suffix.isEmpty, !home.hasSuffix(suffix) else { return home }
-        return home + suffix
+        guard let suffix = ProviderHomeRule.rule(for: providerID)?.managedSuffix, !suffix.isEmpty else { return homePath }
+        var trimmed = homePath
+        while trimmed.count > 1 && trimmed.hasSuffix("/") { trimmed.removeLast() }
+        return trimmed.hasSuffix(suffix) ? homePath : trimmed + suffix
     }
 }

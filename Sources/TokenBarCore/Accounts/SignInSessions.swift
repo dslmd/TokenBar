@@ -90,6 +90,37 @@ public final class SignInSessions {
         }
         return candidates.first { driver.isManagedHome($0) }
     }
+
+    /// The account's path exactly as stored, when it is a TokenBar-managed sign-in. This is the form the driver
+    /// handed back (Gemini: the `.gemini` folder), which `shellAlias` expects; Claude's alias must carry the
+    /// literal `CLAUDE_CONFIG_DIR` string, so it is never normalised here.
+    public nonisolated static func managedAccountPath(for account: Account, driver: AccountLoginDriving) -> String? {
+        guard account.origin == .signedIn, account.dataPath.hasPrefix("/"), driver.isManagedHome(account.dataPath) else { return nil }
+        return account.dataPath
+    }
+
+    /// Managed homes (`<root>/<provider>/<id>`) that no account uses and that were last changed more than
+    /// `minimumAge` ago: leftovers of sign-ins interrupted by a crash. Remove them only through the driver.
+    public nonisolated static func orphanedManagedHomes(root: String, accounts: [Account], fileSystem fs: FileSystem,
+                                                        modificationDate: (String) -> Date?, now: Date,
+                                                        minimumAge: TimeInterval = 3600) -> [String] {
+        let used = accounts.filter { !$0.dataPath.isEmpty }
+            .map { fs.resolvedPath(normalizedPath($0.dataPath, home: fs.homeDirectory)) }
+        var out: [String] = []
+        for provider in fs.entries(of: root).sorted() where !provider.hasPrefix(".") {
+            let dir = root + "/" + provider
+            guard fs.isDirectory(dir) else { continue }
+            for name in fs.entries(of: dir).sorted() where !name.hasPrefix(".") {
+                let home = dir + "/" + name
+                guard fs.isDirectory(home) else { continue }
+                let resolved = fs.resolvedPath(home)
+                if used.contains(where: { $0 == resolved || $0.hasPrefix(resolved + "/") }) { continue }
+                guard let changed = modificationDate(home), now.timeIntervalSince(changed) >= minimumAge else { continue }
+                out.append(home)
+            }
+        }
+        return out
+    }
 }
 
 /// Coarse status for the dot next to an account in settings.

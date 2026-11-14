@@ -45,3 +45,19 @@ struct KeychainBlobStore: CredentialBlobStore {
         throw CredentialStoreError.notWritable
     }
 }
+
+/// Tells whether a generic-password item exists, without reading its secret. Only attributes are
+/// requested (no `kSecReturnData`), so macOS never shows a Keychain password prompt for this check.
+/// Used by the Claude sign-in to notice the moment Claude Code has saved its credentials.
+enum KeychainItemProbe {
+    static func exists(service: String) -> Bool {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+            kSecReturnAttributes as String: true,
+        ]
+        var item: CFTypeRef?
+        return SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess
+    }
+}

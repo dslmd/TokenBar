@@ -19,9 +19,15 @@ struct TokenBarApp: App {
 }
 
 /// Keeps the app out of the Dock (Info.plist also sets LSUIElement).
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+    }
+
+    /// Sign-ins still running would leave CLI processes behind; stop them before quitting.
+    func applicationWillTerminate(_ notification: Notification) {
+        AppModel.current?.prepareForTermination()
     }
 }
 

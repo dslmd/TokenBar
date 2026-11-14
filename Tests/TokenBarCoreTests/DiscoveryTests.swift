@@ -193,8 +193,10 @@ final class DiscoveryTests: XCTestCase {
 
     func testManagedGeminiHomeMapsToDataFolder() {
         XCTAssertEqual(AccountReconciler.dataPath(forManagedHome: "/m/gemini/X", providerID: "gemini", fileSystem: fs), "/m/gemini/X/.gemini")
-        XCTAssertEqual(AccountReconciler.dataPath(forManagedHome: "/m/gemini/X/.gemini/", providerID: "gemini", fileSystem: fs), "/m/gemini/X/.gemini")
-        XCTAssertEqual(AccountReconciler.dataPath(forManagedHome: "/m/codex/X/", providerID: "codex", fileSystem: fs), "/m/codex/X")
+        // The driver's string is kept byte for byte (no trailing-slash trimming).
+        XCTAssertEqual(AccountReconciler.dataPath(forManagedHome: "/m/gemini/X/.gemini/", providerID: "gemini", fileSystem: fs), "/m/gemini/X/.gemini/")
+        XCTAssertEqual(AccountReconciler.dataPath(forManagedHome: "/m/gemini/X/.gemini", providerID: "gemini", fileSystem: fs), "/m/gemini/X/.gemini")
+        XCTAssertEqual(AccountReconciler.dataPath(forManagedHome: "/m/codex/X/", providerID: "codex", fileSystem: fs), "/m/codex/X/")
     }
 
     func testFolderNames() {
