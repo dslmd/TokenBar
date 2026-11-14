@@ -1,10 +1,18 @@
-# Optional tool: builds and tests TokenBar on a macOS runner and renders the UI snapshots.
-# It runs ONLY when started by hand (Actions tab > "macOS build and snapshots" > Run workflow, or
-# `gh workflow run macos-build.yml --ref <branch>`); pushes never start it, because macOS minutes
-# on a private repository are billed at ten times the Linux rate.
+# Builds and tests TokenBar on a macOS runner and renders the UI snapshots.
+# Runs on pushes to the ux-overhaul branch and when started by hand (Actions tab > "macOS build and
+# snapshots" > Run workflow, or `gh workflow run macos-build.yml --ref <branch>`). Not on pushes to
+# main: on a private repository macOS minutes are billed at ten times the Linux rate.
 name: macOS build and snapshots
 
 on:
+  push:
+    branches: [ux-overhaul]
+    paths:
+      - Package.swift
+      - Sources/**
+      - Tests/**
+      - scripts/**
+      - .github/workflows/macos-build.yml
   workflow_dispatch:
     inputs:
       runner:
