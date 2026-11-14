@@ -547,6 +547,17 @@ final class QuotaMergeTests: XCTestCase {
         XCTAssertEqual(QuotaMerge.peakPercent(accounts: [a], usage: usage, quota: [:], now: now), nil)
     }
 
+    func testWriteBackKeepsSingleLineLayout() throws {
+        let compact = Data(#"{"claudeAiOauth":{"accessToken":"a","refreshToken":"r","expiresAt":1,"scopes":["x"]},"other":true}"#.utf8)
+        let resp = Data(#"{"access_token":"n","refresh_token":"r2","expires_in":3600}"#.utf8)
+        let out = try XCTUnwrap(ClaudeQuotaBackend().applyRefresh(response: resp, to: compact, now: Date()))
+        XCTAssertFalse(out.contains(0x0A))
+        XCTAssertEqual(ClaudeQuotaBackend().parseCredentials(out)?.refreshToken, "r2")
+        let pretty = Data("{\n  \"access_token\": \"a\",\n  \"refresh_token\": \"r\"\n}\n".utf8)
+        let g = try XCTUnwrap(GeminiQuotaBackend().applyRefresh(response: resp, to: pretty, now: Date()))
+        XCTAssertTrue(g.contains(0x0A))
+    }
+
     func testSHA256KnownVectors() {
         XCTAssertEqual(SHA256Lite.hex("abc"), "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
         XCTAssertEqual(SHA256Lite.hex(""), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")

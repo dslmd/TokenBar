@@ -66,7 +66,7 @@ public struct ClaudeQuotaBackend: QuotaBackend {
             oauth["expiresAt"] = Int64((now.timeIntervalSince1970 + ttl) * 1000)
         }
         root["claudeAiOauth"] = oauth
-        return CredentialJSON.serialize(root)
+        return CredentialJSON.serialize(root, like: raw)
     }
 
     public func fetchQuota(credentials: OAuthCredentials, http: HTTPClient, now: Date) async throws -> [QuotaWindow] {

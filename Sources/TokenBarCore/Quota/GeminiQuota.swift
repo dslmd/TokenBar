@@ -54,7 +54,7 @@ public struct GeminiQuotaBackend: QuotaBackend {
         if let ttl = JSON.double(r["expires_in"]), ttl > 0 { root["expiry_date"] = Int64((now.timeIntervalSince1970 + ttl) * 1000) }
         if let id = JSON.string(r["id_token"]) { root["id_token"] = id }
         if let rt = JSON.string(r["refresh_token"]) { root["refresh_token"] = rt }
-        return CredentialJSON.serialize(root)
+        return CredentialJSON.serialize(root, like: raw)
     }
 
     public func fetchQuota(credentials: OAuthCredentials, http: HTTPClient, now: Date) async throws -> [QuotaWindow] {

@@ -102,8 +102,13 @@ enum CredentialJSON {
         (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
     }
 
-    static func serialize(_ obj: [String: Any]) -> Data? {
-        try? JSONSerialization.data(withJSONObject: obj, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+    /// Serialises in the layout of `original`: single-line stays single-line. This matters for
+    /// Keychain items, because Claude Code reads its item through `security … -w`, which prints
+    /// a value containing newlines as hex and would leave the CLI unable to parse its own login.
+    static func serialize(_ obj: [String: Any], like original: Data? = nil) -> Data? {
+        var options: JSONSerialization.WritingOptions = [.withoutEscapingSlashes]
+        if let original, original.dropLast().contains(0x0A) { options.insert(.prettyPrinted) }
+        return try? JSONSerialization.data(withJSONObject: obj, options: options)
     }
 
     /// Epoch milliseconds, tolerating seconds and numeric strings.
