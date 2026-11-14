@@ -41,10 +41,6 @@ enum SnapshotRunner {
             Shot(name: "settings-accounts-signing-in", scenario: .signingIn, content: settings),
             Shot(name: "settings-accounts-empty", scenario: .empty, content: settings),
             Shot(name: "settings-general-rich", scenario: .rich, tabIndex: 1, content: settings),
-            // The same tab without the tab view around it, in case selecting the tab does not work offscreen.
-            Shot(name: "settings-general-standalone", scenario: .rich, content: {
-                AnyView(GeneralTab().frame(width: 640, height: 580).padding())
-            }),
             Shot(name: "menubar-rich", scenario: .rich, content: menuBar),
             Shot(name: "menubar-sparse", scenario: .sparse, content: menuBar),
             Shot(name: "menubar-empty", scenario: .empty, content: menuBar),
@@ -82,6 +78,8 @@ enum SnapshotRunner {
         let appearances: [(String, NSAppearance.Name)] = [("light", .aqua), ("dark", .darkAqua)]
         var index: [String] = []
         var problems = 0
+        // One moment for the whole run, so every image shows the same times.
+        let now = Date()
         for shot in shots where only == nil || shot.name.contains(only ?? "") {
             for (label, appearanceName) in appearances {
                 guard let appearance = NSAppearance(named: appearanceName) else {
@@ -89,7 +87,7 @@ enum SnapshotRunner {
                     problems += 1
                     continue
                 }
-                let result = capture(shot, appearance: appearance, scale: scale)
+                let result = capture(shot, appearance: appearance, scale: scale, now: now)
                 problems += result.problems
                 if result.pages.isEmpty {
                     say("FAILED \(shot.name)-\(label): nothing was rendered")
@@ -130,13 +128,13 @@ enum SnapshotRunner {
 
     // MARK: One shot
 
-    private static func capture(_ shot: Shot, appearance: NSAppearance, scale: CGFloat?) -> (pages: [NSBitmapImageRep], problems: Int) {
+    private static func capture(_ shot: Shot, appearance: NSAppearance, scale: CGFloat?, now: Date) -> (pages: [NSBitmapImageRep], problems: Int) {
         // The argument domain is volatile (never written to disk) and is searched first, so the
         // popover's remembered "collapsed" state neither leaks into the snapshot nor gets changed.
         UserDefaults.standard.setVolatileDomain(["collapsedProviders": shot.collapsed], forName: UserDefaults.argumentDomain)
         NSApp.appearance = appearance
 
-        let model = AppModel(demo: shot.scenario.state(home: NSHomeDirectory()))
+        let model = AppModel(demo: shot.scenario.state(now: now, home: NSHomeDirectory()))
         let root = shot.content()
             .environmentObject(model)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -160,7 +158,7 @@ enum SnapshotRunner {
         host.autoresizingMask = [.width, .height]
         container.addSubview(host)
 
-        let window = NSWindow(contentRect: NSRect(x: -30000, y: -30000, width: size.width, height: size.height),
+        let window = SnapshotWindow(contentRect: NSRect(x: -30000, y: -30000, width: size.width, height: size.height),
                               styleMask: [.borderless], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
         window.appearance = appearance
@@ -171,20 +169,25 @@ enum SnapshotRunner {
             window.contentView = nil
         }
         settle()
+        // Overlay scrollers, as on a Mac with a trackpad (a runner without one shows fixed scroll bars).
+        for scroll in descendants(of: container, as: NSScrollView.self) where scroll.scrollerStyle != .overlay {
+            scroll.scrollerStyle = .overlay
+        }
+        settle()
 
-        let problems = 0
+        var problems = 0
         if let tab = shot.tabIndex {
             if let tabs = descendants(of: container, as: NSTabView.self).first, tab < tabs.numberOfTabViewItems {
                 tabs.selectTabViewItem(at: tab)
                 settle()
             } else {
-                // Not counted as a failure: the standalone shot of the tab still shows its content.
-                say("WARNING \(shot.name): no tab view with a tab \(tab) was found, the first tab is shown")
+                say("FAILED \(shot.name): no tab view with a tab \(tab) was found")
+                problems += 1
             }
         }
 
         var pages: [NSBitmapImageRep] = []
-        if let first = bitmap(of: container, scale: scale) { pages.append(first) }
+        if let first = bitmap(of: container, scale: scale, appearance: appearance) { pages.append(first) }
 
         // Extra pages for the tallest scroll area that does not show all of its content.
         let scrollable = descendants(of: container, as: NSScrollView.self).compactMap { scroll -> (NSScrollView, CGFloat, CGFloat)? in
@@ -203,7 +206,7 @@ enum SnapshotRunner {
                 scroll.contentView.scroll(to: NSPoint(x: scroll.contentView.bounds.origin.x, y: y))
                 scroll.reflectScrolledClipView(scroll.contentView)
                 settle()
-                if let page = bitmap(of: container, scale: scale) { pages.append(page) }
+                if let page = bitmap(of: container, scale: scale, appearance: appearance) { pages.append(page) }
             }
         }
         return (pages, problems)
@@ -215,7 +218,7 @@ enum SnapshotRunner {
         CATransaction.flush()
     }
 
-    private static func bitmap(of view: NSView, scale: CGFloat?) -> NSBitmapImageRep? {
+    private static func bitmap(of view: NSView, scale: CGFloat?, appearance: NSAppearance) -> NSBitmapImageRep? {
         view.layoutSubtreeIfNeeded()
         view.displayIfNeeded()
         let bounds = view.bounds
@@ -232,7 +235,11 @@ enum SnapshotRunner {
             rep = view.bitmapImageRepForCachingDisplay(in: bounds)
         }
         guard let rep else { return nil }
-        view.cacheDisplay(in: bounds, to: rep)
+        // AppKit controls that draw themselves (tab bar, buttons) follow the current drawing appearance,
+        // not the view's, when drawn into a bitmap.
+        appearance.performAsCurrentDrawingAppearance {
+            view.cacheDisplay(in: bounds, to: rep)
+        }
         return rep
     }
 
@@ -272,6 +279,15 @@ enum SnapshotRunner {
     private static func say(_ line: String) {
         FileHandle.standardOutput.write(Data((line + "\n").utf8))
     }
+}
+
+/// An offscreen window whose controls draw as in the frontmost window (accent-coloured switches and
+/// checkboxes) although it never becomes key.
+private final class SnapshotWindow: NSWindow {
+    override var isKeyWindow: Bool { true }
+    override var isMainWindow: Bool { true }
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 /// The menu bar label on a plain strip, at the menu bar's text size.
