@@ -23,23 +23,34 @@ public struct ClaudeQuotaBackend: QuotaBackend {
     public func credentialSources(forDataPath dataPath: String, home: URL) -> [CredentialSource] {
         let dir = URL(fileURLWithPath: dataPath)
         var sources: [CredentialSource] = [.file(dir.appendingPathComponent(".credentials.json"))]
-        // The Keychain item is global, so it only belongs to the default profile.
+        // The plain Keychain item is used only when CLAUDE_CONFIG_DIR is unset, i.e. for the default profile.
         let defaults = [home.appendingPathComponent(".claude"), home.appendingPathComponent(".config/claude")]
             .map { $0.resolvingSymlinksInPath().path }
         if defaults.contains(dir.resolvingSymlinksInPath().path) {
             sources.append(.keychain(service: Self.keychainService))
-        } else {
-            // Extra profiles (CLAUDE_CONFIG_DIR): Claude Code is believed to suffix the service
-            // with the first 8 hex chars of SHA-256(config dir). Not confirmed from a published
-            // source; a wrong guess only means "item not found".
-            var candidates = [dataPath]
-            let trimmed = dataPath.count > 1 && dataPath.hasSuffix("/") ? String(dataPath.dropLast()) : dataPath + "/"
-            candidates.append(trimmed)
-            for c in candidates {
-                sources.append(.keychain(service: "\(Self.keychainService)-\(SHA256Lite.hex(c).prefix(8))"))
-            }
+        }
+        // With CLAUDE_CONFIG_DIR set (any value, even ~/.claude), Claude Code suffixes the service with the first
+        // 8 hex chars of SHA-256 over the NFC-normalised literal variable value. This is undocumented; it is
+        // reported consistently by third-party tools (one verified /tmp/claude-alt -> "-04923786"). The literal
+        // value is unknown here, so the likely spellings are tried; a wrong guess only means "item not found".
+        for c in Self.configDirSpellings(dataPath) {
+            let service = "\(Self.keychainService)-\(SHA256Lite.hex(c).prefix(8))"
+            if !sources.contains(.keychain(service: service)) { sources.append(.keychain(service: service)) }
         }
         return sources
+    }
+
+    /// Spellings a shell could have passed for the same directory: as stored, with a trailing slash,
+    /// and symlink-resolved (e.g. /var vs /private/var), all NFC-normalised.
+    static func configDirSpellings(_ dataPath: String) -> [String] {
+        var out: [String] = []
+        let trimmed = dataPath.count > 1 && dataPath.hasSuffix("/") ? String(dataPath.dropLast()) : dataPath
+        let resolved = URL(fileURLWithPath: trimmed).resolvingSymlinksInPath().path
+        for p in [trimmed, trimmed + "/", resolved] {
+            let nfc = p.precomposedStringWithCanonicalMapping
+            if !out.contains(nfc) { out.append(nfc) }
+        }
+        return out
     }
 
     public func parseCredentials(_ raw: Data) -> OAuthCredentials? {
@@ -82,10 +93,12 @@ public struct ClaudeQuotaBackend: QuotaBackend {
 
     static func parseUsage(_ data: Data) throws -> [QuotaWindow] {
         guard let root = CredentialJSON.parse(data) else { throw QuotaError.badResponse }
-        let defs: [(String, String, Int?)] = [
-            ("five_hour", "5 小时", 300), ("seven_day", "每周", 10080),
-            ("seven_day_sonnet", "Sonnet 每周", 10080), ("seven_day_opus", "Opus 每周", 10080),
-        ]
+        // Account-wide windows first, then any per-model weekly windows (`seven_day_<model>`), named from the key.
+        var defs: [(String, String, Int?)] = [("five_hour", "5-hour", 300), ("seven_day", "Weekly", 10080)]
+        for key in root.keys.sorted() where key.hasPrefix("seven_day_") {
+            let suffix = key.dropFirst("seven_day_".count).split(separator: "_").map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+            defs.append((key, "Weekly (\(suffix))", 10080))
+        }
         var out: [QuotaWindow] = []
         for (key, label, minutes) in defs {
             guard let w = root[key] as? [String: Any], let used = JSON.double(w["utilization"]) else { continue }

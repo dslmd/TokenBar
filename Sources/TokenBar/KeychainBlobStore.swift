@@ -2,9 +2,9 @@ import Foundation
 import Security
 import TokenBarCore
 
-/// Reads and updates another app's generic-password Keychain item in place (used for Claude
+/// Reads another app's generic-password Keychain item (used for Claude
 /// Code's "Claude Code-credentials"). macOS may show an access prompt the first time; choose
-/// "始终允许" to avoid repeated prompts. Values are never logged.
+/// "Always Allow" to avoid repeated prompts. Values are never logged.
 struct KeychainBlobStore: CredentialBlobStore {
     let service: String
     var label: String { "keychain:\(service)" }
@@ -33,23 +33,15 @@ struct KeychainBlobStore: CredentialBlobStore {
         }
     }
 
-    /// Re-writes the current value unchanged. This asks the OS for exactly the permission the
-    /// real write-back needs, before a rotating refresh token is spent.
+    // Read-only on purpose. Updating an item that another app created can reset the item's
+    // access list, after which the owning CLI (which reads through /usr/bin/security) is asked
+    // for the Keychain password again. So TokenBar never renews a sign-in that lives in the
+    // Keychain: the CLI renews it the next time it runs, and TokenBar picks the new one up.
     func checkWritable() throws {
-        let current = try read()
-        try update(current)
+        throw CredentialStoreError.notWritable
     }
 
     func write(_ data: Data) throws {
-        try update(data)
-    }
-
-    private func update(_ data: Data) throws {
-        let status = SecItemUpdate(baseQuery as CFDictionary, [kSecValueData as String: data] as CFDictionary)
-        switch status {
-        case errSecSuccess: return
-        case errSecUserCanceled, errSecAuthFailed, errSecInteractionNotAllowed: throw CredentialStoreError.denied
-        default: throw CredentialStoreError.notWritable
-        }
+        throw CredentialStoreError.notWritable
     }
 }

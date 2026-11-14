@@ -11,7 +11,7 @@ public struct GeminiProvider: UsageProvider {
     public let id = "gemini"
     public let displayName = "Gemini CLI"
     public let symbolName = "diamond"
-    public let dataPathHint = "Gemini CLI 主目录（含 tmp 子目录），通常为 ~/.gemini。"
+    public let dataPathHint = "Gemini CLI folder (contains tmp), usually ~/.gemini, or $GEMINI_CLI_HOME/.gemini."
 
     public func defaultDataPaths(environment: [String: String], home: URL) -> [String] {
         [home.appendingPathComponent(".gemini").path]

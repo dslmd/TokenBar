@@ -12,7 +12,7 @@ public struct CodexProvider: UsageProvider {
     public let id = "codex"
     public let displayName = "Codex"
     public let symbolName = "terminal"
-    public let dataPathHint = "Codex 主目录（含 sessions 子目录），例如 ~/.codex；多账号可使用不同的 CODEX_HOME。"
+    public let dataPathHint = "Codex home folder (contains sessions), e.g. ~/.codex or another CODEX_HOME."
 
     public func defaultDataPaths(environment: [String: String], home: URL) -> [String] {
         var paths: [String] = []
@@ -116,7 +116,7 @@ final class CodexParser: FileParser {
 
     static func quotaWindows(from rl: [String: Any], observedAt: Date) -> [QuotaWindow] {
         var windows: [QuotaWindow] = []
-        for (name, fallback) in [("primary", "主要窗口"), ("secondary", "次要窗口")] {
+        for (name, fallback) in [("primary", "Primary window"), ("secondary", "Secondary window")] {
             guard let w = rl[name] as? [String: Any], let used = JSON.double(w["used_percent"]) else { continue }
             let minutes = (w["window_minutes"] ?? w["limit_window_minutes"]).map { JSON.int($0) }.flatMap { $0 > 0 ? $0 : nil }
             var reset: Date?
@@ -133,9 +133,9 @@ final class CodexParser: FileParser {
 
     static func windowLabel(minutes: Int?, fallback: String) -> String {
         guard let m = minutes else { return fallback }
-        if m == 10080 { return "每周" }
-        if m % 1440 == 0 { return "\(m / 1440) 天" }
-        if m % 60 == 0 { return "\(m / 60) 小时" }
-        return "\(m) 分钟"
+        if m == 10080 { return "Weekly" }
+        if m % 1440 == 0 { return "\(m / 1440)-day" }
+        if m % 60 == 0 { return "\(m / 60)-hour" }
+        return "\(m)-minute"
     }
 }

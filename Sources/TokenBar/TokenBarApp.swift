@@ -11,7 +11,6 @@ struct TokenBarApp: App {
         MenuBarExtra {
             PopoverView()
                 .environmentObject(model)
-                .environment(\.locale, Locale(identifier: "zh_CN"))
         } label: {
             MenuBarLabel(model: model)
         }
@@ -38,6 +37,6 @@ struct MenuBarLabel: View {
                 Text(model.menuBarTitle).monospacedDigit()
             }
         }
-        .accessibilityLabel(model.menuBarWarning ? "TokenBar，额度即将用完，\(model.menuBarTitle)" : "TokenBar，\(model.menuBarTitle)")
+        .accessibilityLabel(model.menuBarWarning ? "TokenBar, quota almost used up, \(model.menuBarTitle)" : "TokenBar, \(model.menuBarTitle)")
     }
 }

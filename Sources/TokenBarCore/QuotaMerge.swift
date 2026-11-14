@@ -31,10 +31,10 @@ public enum PathValidation: Equatable, Sendable {
 
     public var message: String {
         switch self {
-        case .valid: return "已找到日志目录"
-        case .missing: return "目录不存在"
-        case .notADirectory: return "这不是一个目录"
-        case .noLogsFound(let expected): return "未找到日志文件，应包含 \(expected.joined(separator: " 或 "))"
+        case .valid: return "Logs found"
+        case .missing: return "Folder not found"
+        case .notADirectory: return "Not a folder"
+        case .noLogsFound(let expected): return "No logs found. Expected \(expected.joined(separator: " or "))"
         }
     }
     public var isValid: Bool { self == .valid }

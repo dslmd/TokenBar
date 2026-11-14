@@ -43,7 +43,7 @@ public protocol UsageProvider: Sendable {
     var displayName: String { get }
     /// SF Symbol used by the app.
     var symbolName: String { get }
-    /// Chinese help text describing what the account's data path should be.
+    /// English help text describing what the account's data path should be.
     var dataPathHint: String { get }
     /// Whether this provider can use an API key stored in the Keychain.
     /// Every current provider reads local logs only, so this is false.

@@ -44,19 +44,29 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var version: Int
     public var accounts: [Account]
     public var settings: AppSettings
+    /// Directories the user removed (`provider|resolved path`), so automatic detection does not add them back.
+    public var dismissedAccounts: [String]
 
-    public init(version: Int = 1, accounts: [Account] = [], settings: AppSettings = AppSettings()) {
+    public init(version: Int = 1, accounts: [Account] = [], settings: AppSettings = AppSettings(), dismissedAccounts: [String] = []) {
         self.version = version
         self.accounts = accounts
         self.settings = settings
+        self.dismissedAccounts = dismissedAccounts
     }
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = (try? c.decodeIfPresent(Int.self, forKey: .version)) ?? 1
-        accounts = (try? c.decodeIfPresent([Account].self, forKey: .accounts)) ?? []
+        // One malformed entry must not drop every account.
+        accounts = ((try? c.decodeIfPresent([LossyAccount].self, forKey: .accounts)) ?? []).compactMap(\.account)
         settings = (try? c.decodeIfPresent(AppSettings.self, forKey: .settings)) ?? AppSettings()
+        dismissedAccounts = (try? c.decodeIfPresent([String].self, forKey: .dismissedAccounts)) ?? []
     }
+}
+
+private struct LossyAccount: Decodable {
+    var account: Account?
+    init(from decoder: Decoder) throws { account = try? Account(from: decoder) }
 }
 
 /// JSON persistence of accounts and settings. API keys are never stored here.
@@ -111,36 +121,5 @@ public final class InMemorySecretStore: SecretStore, @unchecked Sendable {
     public func setSecret(_ secret: String?, for accountID: UUID) throws {
         lock.lock(); defer { lock.unlock() }
         values[accountID] = secret
-    }
-}
-
-/// First-launch detection of default accounts.
-public enum AccountDetector {
-    public static func detectDefaultAccounts(
-        registry: ProviderRegistry = .default,
-        environment: [String: String] = ProcessInfo.processInfo.environment,
-        home: URL = URL(fileURLWithPath: NSHomeDirectory()),
-        fileManager: FileManager = .default
-    ) -> [Account] {
-        var accounts: [Account] = []
-        for provider in registry.providers {
-            var seen = Set<String>()
-            var found: [String] = []
-            for candidate in provider.defaultDataPaths(environment: environment, home: home) {
-                let path = expandPath(candidate)
-                let resolved = URL(fileURLWithPath: path).resolvingSymlinksInPath().path
-                guard !seen.contains(resolved) else { continue }
-                let hasRoot = provider.scanRoots(forDataPath: path).contains { root in
-                    var isDir: ObjCBool = false
-                    return fileManager.fileExists(atPath: root.path, isDirectory: &isDir) && isDir.boolValue
-                }
-                if hasRoot { seen.insert(resolved); found.append(path) }
-            }
-            for (i, path) in found.enumerated() {
-                let name = i == 0 ? "默认" : URL(fileURLWithPath: path).lastPathComponent
-                accounts.append(Account(providerID: provider.id, name: name, dataPath: path))
-            }
-        }
-        return accounts
     }
 }

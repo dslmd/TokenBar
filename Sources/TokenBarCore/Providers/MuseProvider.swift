@@ -16,7 +16,7 @@ public struct MuseProvider: UsageProvider {
     public let id = "muse"
     public let displayName = "Muse Code"
     public let symbolName = "wand.and.stars"
-    public let dataPathHint = "Muse Code 的 sessions 目录，默认 ~/.local/share/muse/sessions（或 $XDG_DATA_HOME/muse/sessions、$MUSE_SESSIONS_DIR）。日志格式为社区逆向所得，Meta 未公开。"
+    public let dataPathHint = "Muse Code (the coding CLI) sessions folder, default ~/.local/share/muse/sessions (or $XDG_DATA_HOME/muse/sessions, $MUSE_SESSIONS_DIR). This is not the Muse personal assistant. The log format is not published by Meta."
 
     public func defaultDataPaths(environment: [String: String], home: URL) -> [String] {
         var paths: [String] = []

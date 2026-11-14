@@ -29,15 +29,15 @@ public enum QuotaIssue: Error, Equatable, Sendable {
 
     public var message: String {
         switch self {
-        case .disabled: return "在线额度已关闭"
-        case .unsupported: return "该提供方暂不支持在线额度"
-        case .notSignedIn: return "未找到登录凭据"
-        case .loginExpired(let cli): return "登录已过期，运行一次 \(cli) 即可恢复"
-        case .cannotWriteBack(let cli): return "无法安全续期登录，运行一次 \(cli) 即可恢复"
-        case .accessDenied: return "没有权限读取登录凭据"
-        case .network: return "网络不可用，稍后重试"
-        case .server(let code): return "额度服务返回错误（\(code)）"
-        case .other: return "获取在线额度失败"
+        case .disabled: return "Online quota is off"
+        case .unsupported: return "Online quota is not available for this provider"
+        case .notSignedIn: return "No sign-in found"
+        case .loginExpired(let cli): return "Sign-in expired. Run \(cli) once to renew it"
+        case .cannotWriteBack(let cli): return "Can't renew the sign-in safely. Run \(cli) once to renew it"
+        case .accessDenied: return "No permission to read the sign-in"
+        case .network: return "Network unavailable, will retry"
+        case .server(let code): return "Quota service error (\(code))"
+        case .other: return "Couldn't load online quota"
         }
     }
 }

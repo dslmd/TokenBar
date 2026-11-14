@@ -7,12 +7,12 @@
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
-  echo "此脚本只能在 macOS 上运行。" >&2
+  echo "This script only runs on macOS." >&2
   exit 1
 fi
 
 INSTALL=ask
-VERSION="0.2.0"
+VERSION="0.3.0"
 for arg in "$@"; do
   case "$arg" in
     --install) INSTALL=yes ;;
@@ -43,7 +43,7 @@ if swift scripts/make-icon.swift "$ICON_TMP/icon.png"; then
   done
   iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/AppIcon.icns"
 else
-  echo "警告：图标生成失败，将使用默认图标。" >&2
+  echo "Warning: icon generation failed, using the default icon." >&2
 fi
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -51,7 +51,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleDevelopmentRegion</key><string>zh_CN</string>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
   <key>CFBundleExecutable</key><string>TokenBar</string>
   <key>CFBundleIconFile</key><string>AppIcon</string>
   <key>CFBundleIdentifier</key><string>com.tokenbar.app</string>
@@ -71,17 +71,17 @@ PLIST
 # Ad-hoc signature (no developer account needed). Gatekeeper may still ask on first launch.
 codesign --force --deep --sign - "$APP"
 codesign --verify --verbose "$APP"
-echo "完成：$APP"
+echo "Done: $APP"
 
 if [[ "$INSTALL" == ask && -t 0 ]]; then
-  read -r -p "复制到 /Applications？[y/N] " answer
+  read -r -p "Copy to /Applications? [y/N] " answer
   [[ "$answer" =~ ^[Yy]$ ]] && INSTALL=yes
 fi
 if [[ "$INSTALL" == yes ]]; then
   rm -rf /Applications/TokenBar.app
   cp -R "$APP" /Applications/TokenBar.app
-  echo "已安装到 /Applications/TokenBar.app"
-  echo "运行：open /Applications/TokenBar.app"
+  echo "Installed to /Applications/TokenBar.app"
+  echo "Run: open /Applications/TokenBar.app"
 else
-  echo "运行：open $APP"
+  echo "Run: open $APP"
 fi

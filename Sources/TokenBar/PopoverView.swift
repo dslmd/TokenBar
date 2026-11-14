@@ -22,13 +22,13 @@ struct PopoverView: View {
         VStack(spacing: 0) {
             header
             Divider()
-            if model.accounts.isEmpty {
+            if model.enabledAccounts.isEmpty {
                 EmptyState()
             } else {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
                         ForEach(model.registry.providers, id: \.id) { provider in
-                            let accounts = model.accounts(for: provider.id)
+                            let accounts = model.enabledAccounts(for: provider.id)
                             if !accounts.isEmpty {
                                 ProviderSection(
                                     provider: provider,
@@ -67,8 +67,8 @@ struct PopoverView: View {
             }
             .buttonStyle(.borderless)
             .keyboardShortcut("r")
-            .help("立即刷新（⌘R）")
-            .accessibilityLabel("立即刷新")
+            .help("Refresh now (⌘R)")
+            .accessibilityLabel("Refresh now")
             .disabled(model.isRefreshing)
 
             Button {
@@ -78,8 +78,8 @@ struct PopoverView: View {
             }
             .buttonStyle(.borderless)
             .keyboardShortcut(",")
-            .help("设置（⌘,）")
-            .accessibilityLabel("设置")
+            .help("Settings (⌘,)")
+            .accessibilityLabel("Settings")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -88,17 +88,17 @@ struct PopoverView: View {
     private var footer: some View {
         HStack {
             if let last = model.lastRefresh {
-                Text("更新于 \(Fmt.clockTime(last))")
+                Text("Updated \(Fmt.clockTime(last))")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else {
-                Text("正在读取…").font(.caption).foregroundStyle(.secondary)
+                Text("Reading…").font(.caption).foregroundStyle(.secondary)
             }
             Spacer()
-            Button("退出") { NSApplication.shared.terminate(nil) }
+            Button("Quit") { NSApplication.shared.terminate(nil) }
                 .buttonStyle(.borderless)
                 .keyboardShortcut("q")
-                .help("退出 TokenBar（⌘Q）")
+                .help("Quit TokenBar (⌘Q)")
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -110,15 +110,37 @@ struct EmptyState: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "tray")
-                .font(.system(size: 34))
-                .foregroundStyle(.secondary)
-            Text("还没有账户").font(.headline)
-            Text("在设置中添加 Codex、Claude Code、Gemini CLI 或 Muse Code 的数据目录。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-            Button("打开设置") { SettingsWindowController.shared.show(model: model) }
+            if !model.hasScanned || model.isScanning {
+                ProgressView().controlSize(.small)
+                Text("Looking for accounts…").font(.headline)
+            } else if !model.accounts.isEmpty {
+                Image(systemName: "eye.slash").font(.system(size: 30)).foregroundStyle(.secondary)
+                Text("All accounts are turned off").font(.headline)
+                Button("Open settings") { SettingsWindowController.shared.show(model: model) }
+            } else {
+                Image(systemName: "person.crop.circle.badge.plus")
+                    .font(.system(size: 34))
+                    .foregroundStyle(.secondary)
+                Text("No accounts found").font(.headline)
+                Text("TokenBar looks for Claude Code, Codex, Gemini CLI and Muse Code on this Mac. Sign in to add an account.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(model.registry.providers, id: \.id) { provider in
+                    if model.signInUnavailableReason(provider.id) == nil {
+                        Button("Sign in to \(provider.displayName)") {
+                            model.startSignIn(provider.id)
+                            SettingsWindowController.shared.show(model: model)
+                        }
+                    }
+                }
+                HStack {
+                    Button("Look again") { Task { await model.rescan() } }
+                    Button("Open settings") { SettingsWindowController.shared.show(model: model) }
+                }
+                .buttonStyle(.borderless)
+            }
         }
         .padding(24)
         .frame(maxWidth: .infinity)
@@ -148,7 +170,7 @@ struct ProviderSection: View {
                     Label(provider.displayName, systemImage: provider.symbolName)
                         .font(.subheadline.weight(.semibold))
                     Spacer()
-                    Text("今日 \(Fmt.tokens(todayTotal))")
+                    Text("Today \(Fmt.tokens(todayTotal))")
                         .font(.caption)
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -156,7 +178,7 @@ struct ProviderSection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("\(provider.displayName)，\(isCollapsed ? "已折叠" : "已展开")")
+            .accessibilityLabel("\(provider.displayName), \(isCollapsed ? "collapsed" : "expanded")")
 
             if !isCollapsed {
                 ForEach(accounts) { account in
@@ -180,7 +202,7 @@ struct AccountCard: View {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
                     Text(account.name).font(.subheadline.weight(.medium))
-                    Text("读取中…").font(.caption).foregroundStyle(.secondary)
+                    Text("Reading…").font(.caption).foregroundStyle(.secondary)
                 }
             }
         }
@@ -196,7 +218,7 @@ struct AccountCard: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text(account.name).font(.subheadline.weight(.semibold))
                 if let last = usage.lastActivity {
-                    Text("最近活动 \(Fmt.relative(last))")
+                    Text("Last active \(Fmt.relative(last))")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -206,7 +228,7 @@ struct AccountCard: View {
                 Text(Fmt.tokens(model.displayTotal(usage.today)))
                     .font(.system(size: 24, weight: .semibold, design: .rounded))
                     .monospacedDigit()
-                Text("今日").font(.caption2).foregroundStyle(.secondary)
+                Text("Today").font(.caption2).foregroundStyle(.secondary)
             }
         }
 
@@ -214,8 +236,8 @@ struct AccountCard: View {
             StatusLine(systemImage: "exclamationmark.triangle", text: message)
         } else {
             HStack(spacing: 16) {
-                StatChip(title: "近 7 天", value: model.displayTotal(usage.last7Days))
-                StatChip(title: "本月", value: model.displayTotal(usage.month))
+                StatChip(title: "Last 7 days", value: model.displayTotal(usage.last7Days))
+                StatChip(title: "This month", value: model.displayTotal(usage.month))
                 Spacer()
             }
             if !usage.today.isZero {
@@ -224,7 +246,7 @@ struct AccountCard: View {
             if usage.daily.contains(where: { !$0.tokens.isZero }) {
                 DailyBars(days: usage.daily, value: { model.displayTotal($0) })
             } else if usage.status == .noRecentData {
-                StatusLine(systemImage: "moon.zzz", text: "本月暂无用量记录")
+                StatusLine(systemImage: "moon.zzz", text: "No usage this month")
             }
         }
 
@@ -240,8 +262,8 @@ struct AccountCard: View {
                 ForEach(Array(effective.observation.windows.enumerated()), id: \.offset) { _, window in
                     QuotaBar(window: window)
                 }
-                Text(effective.isOnline ? "额度来自在线查询 · \(Fmt.relative(effective.observation.observedAt))"
-                                        : "额度来自本地日志 · \(Fmt.relative(effective.observation.observedAt))")
+                Text(effective.isOnline ? "Quota from online check · \(Fmt.relative(effective.observation.observedAt))"
+                                        : "Quota from local logs · \(Fmt.relative(effective.observation.observedAt))")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
@@ -283,7 +305,7 @@ struct SplitBar: View {
     let tokens: TokenBreakdown
 
     private var parts: [(String, Int, Color)] {
-        [("输入", tokens.input, Color.blue), ("输出", tokens.output, Color.orange), ("缓存", tokens.cache, Color.gray)]
+        [("Input", tokens.input, Color.blue), ("Output", tokens.output, Color.orange), ("Cache", tokens.cache, Color.gray)]
     }
 
     var body: some View {
@@ -313,7 +335,7 @@ struct SplitBar: View {
             .font(.caption2)
             .foregroundStyle(.secondary)
         }
-        .help("缓存读取 \(TokenFormatter.grouped(tokens.cacheRead)) / 缓存写入 \(TokenFormatter.grouped(tokens.cacheWrite))")
+        .help("Cache read \(TokenFormatter.grouped(tokens.cacheRead)) / cache write \(TokenFormatter.grouped(tokens.cacheWrite))")
     }
 }
 
@@ -342,7 +364,7 @@ struct DailyBars: View {
                         .foregroundStyle(isToday ? .primary : .secondary)
                 }
                 .frame(maxWidth: .infinity)
-                .help("\(Fmt.dayMonth(day.day))：\(TokenFormatter.grouped(values[index])) tokens")
+                .help("\(Fmt.dayMonth(day.day)): \(TokenFormatter.grouped(values[index])) tokens")
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("\(Fmt.dayMonth(day.day)) \(Fmt.tokens(values[index])) tokens")
             }
@@ -371,10 +393,10 @@ struct QuotaBar: View {
                 Text(window.label).font(.caption)
                 Spacer()
                 if stale {
-                    Text("窗口已重置，使用后更新").font(.caption2).foregroundStyle(.secondary)
+                    Text("Window reset, updates after use").font(.caption2).foregroundStyle(.secondary)
                 } else {
                     if let reset = window.resetsAt {
-                        Text("\(Fmt.relative(reset))重置").font(.caption2).foregroundStyle(.secondary)
+                        Text("Resets \(Fmt.relative(reset))").font(.caption2).foregroundStyle(.secondary)
                     }
                     Text("\(Int(window.usedPercent.rounded()))%")
                         .font(.caption.weight(.medium))
@@ -393,6 +415,6 @@ struct QuotaBar: View {
             .frame(height: 6)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(window.label) 已用 \(Int(window.usedPercent.rounded()))%")
+        .accessibilityLabel("\(window.label) \(Int(window.usedPercent.rounded()))% used")
     }
 }

@@ -39,7 +39,7 @@ public struct CodexQuotaBackend: QuotaBackend {
     static func parseUsage(_ data: Data) throws -> [QuotaWindow] {
         guard let root = CredentialJSON.parse(data), let rl = root["rate_limit"] as? [String: Any] else { throw QuotaError.badResponse }
         var out: [QuotaWindow] = []
-        for (key, fallback) in [("primary_window", "主要窗口"), ("secondary_window", "次要窗口")] {
+        for (key, fallback) in [("primary_window", "Primary window"), ("secondary_window", "Secondary window")] {
             guard let w = rl[key] as? [String: Any], let used = JSON.double(w["used_percent"]) else { continue }
             let minutes = JSON.int(w["limit_window_seconds"]) / 60
             let reset = JSON.int64(w["reset_at"]).flatMap { $0 > 0 ? Date(timeIntervalSince1970: TimeInterval($0)) : nil }

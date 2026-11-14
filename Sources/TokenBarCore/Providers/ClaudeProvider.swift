@@ -12,7 +12,7 @@ public struct ClaudeProvider: UsageProvider {
     public let id = "claude"
     public let displayName = "Claude Code"
     public let symbolName = "sparkle"
-    public let dataPathHint = "Claude Code 配置目录（含 projects 子目录），例如 ~/.claude；多账号可使用不同的 CLAUDE_CONFIG_DIR。"
+    public let dataPathHint = "Claude Code config folder (contains projects), e.g. ~/.claude or another CLAUDE_CONFIG_DIR."
 
     public func defaultDataPaths(environment: [String: String], home: URL) -> [String] {
         var paths: [String] = []

@@ -42,7 +42,7 @@ final class CoreTests: XCTestCase {
         let dir = try TestSupport.tempDir()
         let store = ConfigStore(url: dir.appendingPathComponent("sub/config.json"))
         XCTAssertNil(store.load())
-        let cfg = AppConfig(accounts: [Account(providerID: "claude", name: "工作", dataPath: "~/.claude-work")],
+        let cfg = AppConfig(accounts: [Account(providerID: "claude", name: "Work", dataPath: "~/.claude-work")],
                             settings: AppSettings(refreshIntervalSeconds: 30, menuBarProviderID: "codex", menuBarPeriod: .month, menuBarIncludesCache: true))
         try store.save(cfg)
         XCTAssertEqual(store.load(), cfg)
@@ -73,24 +73,6 @@ final class CoreTests: XCTestCase {
         let text = try String(contentsOf: store.url, encoding: .utf8)
         XCTAssertFalse(text.contains("sk-super-secret"))
         XCTAssertEqual(secrets.secret(for: acct.id), "sk-super-secret")
-    }
-
-    func testAutoDetectsDefaultAccounts() throws {
-        let home = try TestSupport.tempDir()
-        let fm = FileManager.default
-        try fm.createDirectory(at: home.appendingPathComponent(".claude/projects"), withIntermediateDirectories: true)
-        try fm.createDirectory(at: home.appendingPathComponent(".codex/sessions"), withIntermediateDirectories: true)
-        try fm.createDirectory(at: home.appendingPathComponent(".gemini/tmp"), withIntermediateDirectories: true)
-        let work = home.appendingPathComponent("claude-work/projects")
-        try fm.createDirectory(at: work, withIntermediateDirectories: true)
-
-        let accounts = AccountDetector.detectDefaultAccounts(
-            environment: ["CLAUDE_CONFIG_DIR": home.appendingPathComponent("claude-work").path], home: home)
-        XCTAssertEqual(accounts.map(\.providerID), ["claude", "claude", "codex", "gemini"])
-        XCTAssertEqual(accounts[0].name, "默认")
-        XCTAssertEqual(accounts[0].dataPath, home.appendingPathComponent("claude-work").path)
-        XCTAssertEqual(accounts[1].name, ".claude")
-        XCTAssertFalse(accounts.contains { $0.providerID == "muse" })
     }
 
     func testMenuBarSummary() {

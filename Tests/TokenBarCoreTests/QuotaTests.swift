@@ -116,7 +116,7 @@ final class QuotaTests: XCTestCase {
         let r = await svc.refresh(accounts: [account], enabled: true)[account.id]!
         XCTAssertNil(r.issue)
         let w = r.observation!.windows
-        XCTAssertEqual(w.map(\.label), ["5 小时", "每周", "Sonnet 每周"])
+        XCTAssertEqual(w.map(\.label), ["5-hour", "Weekly", "Weekly (Sonnet)"])
         XCTAssertEqual(w[0].usedPercent, 23.0)
         XCTAssertEqual(w[0].resetsAt, ISO8601.parse("2025-10-15T15:00:00Z"))
         XCTAssertEqual(w[1].usedPercent, 41.5)
@@ -314,7 +314,7 @@ final class QuotaTests: XCTestCase {
     func testIssueMessagesNeverContainTokens() {
         let issues: [QuotaIssue] = [.loginExpired(cli: "claude"), .cannotWriteBack(cli: "gemini"), .network, .server(500), .accessDenied, .other]
         for i in issues { XCTAssertFalse(i.message.contains("AT-")) }
-        XCTAssertEqual(QuotaIssue.loginExpired(cli: "codex").message, "登录已过期，运行一次 codex 即可恢复")
+        XCTAssertEqual(QuotaIssue.loginExpired(cli: "codex").message, "Sign-in expired. Run codex once to renew it")
     }
 
     // MARK: Codex (CLI owns the refresh chain)
@@ -343,7 +343,7 @@ final class QuotaTests: XCTestCase {
         let svc = makeService(backend: CodexQuotaBackend(), store: store, http: http, clock: Clock())
         let r = await svc.refresh(accounts: [a], enabled: true)[a.id]!
         XCTAssertNil(r.issue)
-        XCTAssertEqual(r.observation?.windows.map(\.label), ["5 小时", "每周"])
+        XCTAssertEqual(r.observation?.windows.map(\.label), ["5-hour", "Weekly"])
         XCTAssertEqual(r.observation?.windows[0].usedPercent, 17)
         XCTAssertEqual(r.observation?.windows[1].resetsAt, Date(timeIntervalSince1970: 1_761_000_000))
         XCTAssertEqual(http.requests[0].headers["ChatGPT-Account-Id"], "acct-1")
@@ -465,8 +465,10 @@ final class QuotaTests: XCTestCase {
 
     func testBackendCredentialSources() {
         let home = URL(fileURLWithPath: "/Users/me")
-        XCTAssertEqual(ClaudeQuotaBackend().credentialSources(forDataPath: "/Users/me/.claude", home: home),
+        // Default profile: plain item first, then the suffixed items used when CLAUDE_CONFIG_DIR points at it.
+        XCTAssertEqual(Array(ClaudeQuotaBackend().credentialSources(forDataPath: "/Users/me/.claude", home: home).prefix(2)),
                        [.file(URL(fileURLWithPath: "/Users/me/.claude/.credentials.json")), .keychain(service: "Claude Code-credentials")])
+        XCTAssertEqual(ClaudeQuotaBackend().credentialSources(forDataPath: "/Users/me/.claude", home: home).count, 4)
         XCTAssertEqual(ClaudeQuotaBackend().credentialSources(forDataPath: "/Users/me/claude-work", home: home),
                        [.file(URL(fileURLWithPath: "/Users/me/claude-work/.credentials.json")),
                         .keychain(service: "Claude Code-credentials-cbe7f9b7"),
@@ -535,9 +537,9 @@ final class QuotaMergeTests: XCTestCase {
     func testEffectiveQuotaPrefersOnlineAndPeakIgnoresStaleWindows() {
         let now = TestSupport.now
         let a = Account(providerID: "codex", name: "a", dataPath: "")
-        let local = QuotaObservation(observedAt: now, windows: [QuotaWindow(label: "5 小时", usedPercent: 95, resetsAt: now.addingTimeInterval(-5))])
-        let online = QuotaObservation(observedAt: now, windows: [QuotaWindow(label: "5 小时", usedPercent: 30, resetsAt: now.addingTimeInterval(500)),
-                                                                 QuotaWindow(label: "每周", usedPercent: 91, resetsAt: nil)])
+        let local = QuotaObservation(observedAt: now, windows: [QuotaWindow(label: "5-hour", usedPercent: 95, resetsAt: now.addingTimeInterval(-5))])
+        let online = QuotaObservation(observedAt: now, windows: [QuotaWindow(label: "5-hour", usedPercent: 30, resetsAt: now.addingTimeInterval(500)),
+                                                                 QuotaWindow(label: "Weekly", usedPercent: 91, resetsAt: nil)])
         let usage = [a.id: AccountUsage(quota: local, updatedAt: now)]
         XCTAssertEqual(QuotaMerge.effective(local: local, online: nil)?.isOnline, false)
         XCTAssertEqual(QuotaMerge.effective(local: local, online: online)?.isOnline, true)
