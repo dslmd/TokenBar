@@ -28,6 +28,8 @@ public actor QuotaService {
         var blockedUntil: Date?
         /// Fingerprint of the credentials when a hard auth failure happened; the block lifts when it changes.
         var blockedFingerprint: Int?
+        /// Last time the stores were re-read to see whether a block can lift (each read may be a Keychain access).
+        var lastFingerprintCheck: Date?
         var inFlight = false
     }
 
@@ -96,8 +98,14 @@ public actor QuotaService {
             // A hard auth block is lifted early only when the stored credentials changed (user re-logged in).
             // A denied Keychain prompt is retried only on an explicit manual refresh (never in the background).
             let retryDenied = force && st.result.issue == .accessDenied
-            if !retryDenied, st.blockedFingerprint == nil || fingerprint(stores(for: account, backend: backend)) == st.blockedFingerprint {
-                return st.result
+            if !retryDenied {
+                guard let blocked = st.blockedFingerprint else { return st.result }
+                // Re-reading the stores can touch another app's Keychain item: in the background do it at most
+                // once per minInterval, not on every UI refresh tick.
+                if !force, let last = st.lastFingerprintCheck, t.timeIntervalSince(last) < timing.minInterval { return st.result }
+                st.lastFingerprintCheck = t
+                states[account.id] = st
+                if fingerprint(stores(for: account, backend: backend)) == blocked { return st.result }
             }
         }
 
@@ -118,9 +126,11 @@ public actor QuotaService {
             s.failures += 1
             let delay = hard ? timing.maxBackoff
                 : min(timing.maxBackoff, timing.baseBackoff * pow(2, Double(s.failures - 1)))
-            s.blockedUntil = now().addingTimeInterval(delay)
+            // A denied Keychain prompt is retried only on an explicit manual refresh, never when the backoff ends.
+            s.blockedUntil = issue == .accessDenied ? .distantFuture : now().addingTimeInterval(delay)
             // Never re-read a store that just refused us: that would raise another Keychain prompt.
             s.blockedFingerprint = (hard && issue != .accessDenied) ? fingerprint(stores(for: account, backend: backend)) : nil
+            s.lastFingerprintCheck = now()
         }
         states[account.id] = s
         return s.result

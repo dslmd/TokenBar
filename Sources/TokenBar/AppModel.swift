@@ -40,6 +40,7 @@ final class AppModel: ObservableObject {
     private let signIn: SignInSessions
     private var museSignIn: MuseSignInController?
     private var isRefreshingQuota = false
+    private var quotaRefreshQueued = false
     private var isRefreshingWebQuota = false
     private var sweptLeftovers = false
     private var timerTask: Task<Void, Never>?
@@ -186,14 +187,21 @@ final class AppModel: ObservableObject {
     }
 
     func refreshQuota(force: Bool = false) async {
-        guard !isRefreshingQuota else { return }
+        // A forced request that arrives mid-cycle (a switch was flipped, or a manual refresh)
+        // runs right after instead of being dropped.
+        guard !isRefreshingQuota else { if force { quotaRefreshQueued = true }; return }
         isRefreshingQuota = true
         defer { isRefreshingQuota = false }
-        let accounts = catalog.cliQuotaAccounts(enabledAccounts)
-        let result = await quotaService.refresh(accounts: accounts,
-                                                enabled: config.settings.onlineQuotaEnabled, force: force)
-        let live = Set(accounts.map(\.id))
-        quota = result.filter { live.contains($0.key) }
+        var forceNext = force
+        repeat {
+            quotaRefreshQueued = false
+            let accounts = catalog.cliQuotaAccounts(enabledAccounts)
+            let result = await quotaService.refresh(accounts: accounts,
+                                                    enabled: config.settings.onlineQuotaEnabled, force: forceNext)
+            let live = Set(catalog.cliQuotaAccounts(enabledAccounts).map(\.id))
+            quota = result.filter { live.contains($0.key) }
+            forceNext = true
+        } while quotaRefreshQueued
     }
 
     /// Muse accounts. The service throttles itself; with online quota off (globally or for the account)
