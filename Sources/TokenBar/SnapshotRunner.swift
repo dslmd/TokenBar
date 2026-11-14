@@ -141,10 +141,18 @@ enum SnapshotRunner {
             .environmentObject(model)
             .background(Color(nsColor: .windowBackgroundColor))
         let host = NSHostingView(rootView: AnyView(root))
-        host.sizingOptions = []
         host.appearance = appearance
-        let fitting = host.fittingSize
-        let size = NSSize(width: max(40, fitting.width.rounded(.up)), height: max(20, fitting.height.rounded(.up)))
+        // The view's ideal size, as a window sized to its content would get. Measured before the automatic
+        // sizing constraints are switched off (without them the hosting view reports no size at all).
+        host.layoutSubtreeIfNeeded()
+        var ideal = host.intrinsicContentSize
+        if ideal.width < 1 || ideal.height < 1 { ideal = host.fittingSize }
+        host.sizingOptions = []
+        guard ideal.width >= 1, ideal.height >= 1, ideal.width < 4000, ideal.height < 8000 else {
+            say("FAILED \(shot.name): the view reported an unusable size \(ideal)")
+            return ([], 1)
+        }
+        let size = NSSize(width: ideal.width.rounded(.up), height: ideal.height.rounded(.up))
 
         let container = NSView(frame: NSRect(origin: .zero, size: size))
         container.appearance = appearance

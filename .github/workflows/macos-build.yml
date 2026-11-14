@@ -19,6 +19,11 @@ on:
         description: Runner image (its default Xcode must be able to target macOS 13)
         required: false
         default: macos-15
+      print_snapshots:
+        description: Also print the snapshots into the job log (base64)
+        type: boolean
+        required: false
+        default: false
 
 permissions:
   contents: read
@@ -90,6 +95,19 @@ jobs:
           echo "Compiler warnings: $(wc -l < ci-logs/warnings.txt | tr -d ' ') (see the build-logs artifact)" >> "$GITHUB_STEP_SUMMARY"
           if [ -d build/TokenBar.app ]; then
             ditto -c -k --keepParent build/TokenBar.app TokenBar.app.zip
+          fi
+
+      # For readers that can fetch job logs but not artifacts: the snapshots as a base64 tar archive.
+      # Decode with: sed -n '/BEGIN SNAPSHOTS/,/END SNAPSHOTS/p' log | grep -v SNAPSHOTS | base64 -d | tar xz
+      - name: Print snapshots into the log
+        if: always() && (github.event_name == 'push' || inputs.print_snapshots)
+        run: |
+          if ls snapshots/*.png >/dev/null 2>&1; then
+            echo "-----BEGIN SNAPSHOTS-----"
+            tar czf - snapshots | base64 -b 76
+            echo "-----END SNAPSHOTS-----"
+          else
+            echo "No snapshots to print."
           fi
 
       - name: Upload snapshots
