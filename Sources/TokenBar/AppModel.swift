@@ -30,12 +30,15 @@ final class AppModel: ObservableObject {
 
     let registry = ProviderRegistry.default
     let catalog = ProviderCatalog.default
-    let secrets: SecretStore = KeychainSecretStore()
+    let secrets: SecretStore
+    /// True when the model shows fixed demo data (UI snapshots): it then never reads or writes files,
+    /// the Keychain or the network, and never starts timers.
+    let isDemo: Bool
 
     private let store = ConfigStore()
     private let fileSystem = LocalFileSystem()
     private let coordinator = UsageCoordinator()
-    private let quotaService = QuotaService.standard(keychain: { service in KeychainBlobStore(service: service) })
+    private let quotaService: QuotaService
     private let museService: MuseAIService
     private let signIn: SignInSessions
     private var museSignIn: MuseSignInController?
@@ -65,6 +68,9 @@ final class AppModel: ObservableObject {
     private(set) static weak var current: AppModel?
 
     init() {
+        isDemo = false
+        secrets = KeychainSecretStore()
+        quotaService = QuotaService.standard(keychain: { service in KeychainBlobStore(service: service) })
         config = store.load() ?? AppConfig()
         // Stateless Keychain access: a second instance reads the same items as `secrets`.
         museService = MuseAIService(secrets: KeychainSecretStore())
@@ -82,6 +88,35 @@ final class AppModel: ObservableObject {
         syncLaunchAtLogin()
         Self.current = self
         startTimer()
+    }
+
+    /// A model that shows `demo` as it is and stays that way: nothing is loaded, scanned, fetched or saved.
+    /// Used by snapshot mode (`TokenBar --snapshot <dir>`).
+    init(demo: DemoState) {
+        isDemo = true
+        secrets = InMemorySecretStore()
+        quotaService = QuotaService.standard(keychain: nil)
+        config = demo.config
+        museService = MuseAIService(secrets: InMemorySecretStore())
+        signIn = SignInSessions(driver: DemoLoginDriver(managedRootPath: Self.managedRootPath))
+        usage = demo.usage
+        quota = demo.quota
+        identities = demo.identities
+        webQuota = demo.webQuota
+        signInPhases = demo.signInPhases
+        hasScanned = demo.hasScanned
+        isScanning = demo.isScanning
+        lastRefresh = demo.lastRefresh
+    }
+
+    /// The model for a normal launch, or a demo model for `TokenBar --demo [scenario]` (default `rich`;
+    /// see `DemoScenario` for the names). Demo mode runs the real menu bar app without touching the
+    /// user's accounts, the Keychain or the network.
+    static func forLaunch(arguments: [String] = CommandLine.arguments) -> AppModel {
+        guard let flag = arguments.firstIndex(of: "--demo") else { return AppModel() }
+        let name = flag + 1 < arguments.count ? arguments[flag + 1] : ""
+        let scenario = DemoScenario(rawValue: name) ?? .rich
+        return AppModel(demo: scenario.state(home: NSHomeDirectory()))
     }
 
     /// Called when the app quits: stops sign-ins still in progress (CLI child processes are not killed
@@ -170,6 +205,7 @@ final class AppModel: ObservableObject {
     func refresh(force: Bool = false) async {
         // A request that arrives mid-refresh (e.g. an account was just added) is
         // remembered and run right after, instead of being dropped.
+        guard !isDemo else { return }
         guard !isRefreshing else { refreshQueued = true; return }
         isRefreshing = true
         defer { isRefreshing = false }
@@ -189,6 +225,7 @@ final class AppModel: ObservableObject {
     func refreshQuota(force: Bool = false) async {
         // A forced request that arrives mid-cycle (a switch was flipped, or a manual refresh)
         // runs right after instead of being dropped.
+        guard !isDemo else { return }
         guard !isRefreshingQuota else { if force { quotaRefreshQueued = true }; return }
         isRefreshingQuota = true
         defer { isRefreshingQuota = false }
@@ -207,6 +244,7 @@ final class AppModel: ObservableObject {
     /// Muse accounts. The service throttles itself; with online quota off (globally or for the account)
     /// it is not called at all.
     func refreshWebQuota(force: Bool = false) async {
+        guard !isDemo else { return }
         guard !isRefreshingWebQuota else { return }
         isRefreshingWebQuota = true
         defer { isRefreshingWebQuota = false }
@@ -222,6 +260,7 @@ final class AppModel: ObservableObject {
     }
 
     private func refreshWebQuota(accountID id: UUID) async {
+        guard !isDemo else { return }
         guard catalog.webQuotaTargets(config.accounts, onlineQuotaEnabled: config.settings.onlineQuotaEnabled).contains(id) else { return }
         let state = await museService.refresh(accountID: id, force: true)
         if catalog.webQuotaTargets(config.accounts, onlineQuotaEnabled: config.settings.onlineQuotaEnabled).contains(id) {
@@ -239,7 +278,7 @@ final class AppModel: ObservableObject {
     /// Looks for accounts on this Mac (default homes, profile folders, shell start-up files, TokenBar sign-ins),
     /// adds new ones, keeps removed ones removed, and refreshes the signed-in identities. Disk work runs off the main thread.
     func rescan() async {
-        guard !isScanning else { return }
+        guard !isDemo, !isScanning else { return }
         isScanning = true
         defer { isScanning = false; hasScanned = true; lastScan = Date() }
         let fs = fileSystem
@@ -276,6 +315,7 @@ final class AppModel: ObservableObject {
     }
 
     private func reloadIdentities() async {
+        guard !isDemo else { return }
         let fs = fileSystem
         let targets = catalog.logAccounts(config.accounts).map { ($0.id, $0.providerID, normalizedPath($0.dataPath, home: fs.homeDirectory)) }
         identities = await Task.detached(priority: .utility) { () -> [UUID: AccountIdentity] in
@@ -300,6 +340,7 @@ final class AppModel: ObservableObject {
     }
 
     func startSignIn(_ providerID: String) {
+        guard !isDemo else { return }
         if catalog.capabilities(of: providerID)?.signIn == .web {
             signInToMuse()
         } else {
@@ -332,6 +373,7 @@ final class AppModel: ObservableObject {
     /// Opens the Muse sign-in window. With `accountID`, the new session replaces that account's stored
     /// session ("Sign in again"); otherwise a new account is added. Only one window at a time.
     func signInToMuse(replacing accountID: UUID? = nil) {
+        guard !isDemo else { return }
         if let open = museSignIn {
             open.bringToFront()
             return
@@ -386,6 +428,7 @@ final class AppModel: ObservableObject {
     // MARK: Mutations (each persists immediately)
 
     private func commit(refresh: Bool = true) {
+        guard !isDemo else { return }
         try? store.save(config)
         if refresh { Task { await self.refresh() } }
     }
@@ -475,6 +518,7 @@ final class AppModel: ObservableObject {
     // MARK: Launch at login (macOS 13+)
 
     func setLaunchAtLogin(_ enabled: Bool) {
+        guard !isDemo else { return }
         do {
             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
         } catch {

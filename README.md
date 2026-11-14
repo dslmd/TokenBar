@@ -130,6 +130,21 @@ Muse 是 Meta 的私人助理（muse.ai），与编程 CLI Muse Code 是两个�
 - Claude Code 在 macOS 上通常把凭据放在钥匙串：首次读取会弹出授权窗口，请选“始终允许”（Always Allow）。选“拒绝”后不会再自动弹窗，手动点刷新才会重试。
 - 网络或认证失败只会在卡片上显示一行小提示，**不会影响本地 token 数字**；最近一次成功的额度会继续显示。
 
+## 开发：界面快照与演示数据
+
+不需要真实账户、钥匙串或网络，就能查看界面（数据来自 `Sources/TokenBarCore/Demo/DemoData.swift` 中的虚构场景，邮箱均为 example.com）：
+
+```bash
+scripts/snapshot.sh                  # 构建并把弹窗、设置各标签页、空状态、菜单栏标签渲染为 PNG（浅色 + 深色，@2x），输出到 build/snapshots/
+scripts/snapshot.sh --snapshot-only popover   # 只渲染名称包含 popover 的画面
+scripts/dev-run.sh                   # 构建 debug 版，结束正在运行的 TokenBar 并启动新的
+scripts/dev-run.sh --demo            # 用演示数据运行真实的菜单栏应用（场景：rich、signingIn、sparse、empty、scanning、allOff、loading）
+```
+
+快照模式也可以直接调用：`TokenBar --snapshot <输出目录>`。它用离屏窗口和 AppKit 的 `cacheDisplay` 截取真实视图，不需要屏幕录制或辅助功能权限；内容超出滚动区域时会多输出 `-p2`、`-p3` 等分页。演示模式下应用不读取也不保存任何内容。
+
+`.github/workflows/macos-build.yml` 是可选工具：只能手动触发（Actions 页面或 `gh workflow run macos-build.yml --ref <分支>`），在 macOS runner 上构建、测试、打包并上传快照、构建日志和 `TokenBar.app`。私有仓库的 macOS 分钟按 10 倍计费，所以推送不会触发它。
+
 ## 统计口径
 
 - 输入 = 不含缓存命中的输入；输出 = 输出（含推理 token）；缓存 = 缓存读取 + 缓存写入。
