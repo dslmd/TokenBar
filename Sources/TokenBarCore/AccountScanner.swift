@@ -205,14 +205,18 @@ final class AccountScanner {
         }
 
         var today = TokenBreakdown.zero, week = TokenBreakdown.zero, month = TokenBreakdown.zero
+        var daily = periods.dayStarts.map { DailyUsage(day: $0) }
         var last: Date?
         for e in merged.values {
+            if e.timestamp >= periods.weekStart, let i = periods.dayStarts.lastIndex(where: { $0 <= e.timestamp }) {
+                daily[i].tokens += e.tokens
+            }
             if e.timestamp >= periods.monthStart { month += e.tokens }
             if e.timestamp >= periods.weekStart { week += e.tokens }
             if e.timestamp >= periods.todayStart { today += e.tokens }
             if last == nil || e.timestamp > last! { last = e.timestamp }
         }
-        return AccountUsage(today: today, last7Days: week, month: month, quota: quota,
+        return AccountUsage(today: today, last7Days: week, month: month, daily: daily, quota: quota,
                             lastActivity: last, updatedAt: now, filesTracked: files.count,
                             status: merged.isEmpty ? .noRecentData : .ok)
     }
@@ -223,14 +227,20 @@ struct Periods {
     let todayStart: Date
     let weekStart: Date      // start of day, 6 days before today => 7 calendar days incl. today
     let monthStart: Date
+    /// Start of each of the last seven days, oldest first.
+    let dayStarts: [Date]
     /// Anything older than this can never be shown, so it is not parsed or kept.
     let retentionStart: Date
 
     init(now: Date, calendar: Calendar) {
-        todayStart = calendar.startOfDay(for: now)
-        weekStart = calendar.date(byAdding: .day, value: -6, to: todayStart) ?? todayStart.addingTimeInterval(-6 * 86400)
-        monthStart = calendar.dateInterval(of: .month, for: now)?.start ?? todayStart
+        let today = calendar.startOfDay(for: now)
+        let week = calendar.date(byAdding: .day, value: -6, to: today) ?? today.addingTimeInterval(-6 * 86400)
+        let month = calendar.dateInterval(of: .month, for: now)?.start ?? today
+        todayStart = today
+        weekStart = week
+        monthStart = month
+        dayStarts = (0..<7).map { calendar.date(byAdding: .day, value: $0, to: week) ?? week.addingTimeInterval(Double($0) * 86400) }
         // One extra day of slack so files touched just before the boundary are still read.
-        retentionStart = min(weekStart, monthStart).addingTimeInterval(-86400)
+        retentionStart = min(week, month).addingTimeInterval(-86400)
     }
 }

@@ -11,9 +11,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var menuBarPeriod: MenuBarPeriod
     /// Whether cache read/write tokens count towards the menu bar number.
     public var menuBarIncludesCache: Bool
+    /// Show the number next to the menu bar icon (false = icon only).
+    public var menuBarShowsNumber: Bool
+    /// Global switch for online quota (network access). Default on.
+    public var onlineQuotaEnabled: Bool
 
     public init(refreshIntervalSeconds: Int = 60, menuBarProviderID: String? = nil,
-                menuBarPeriod: MenuBarPeriod = .today, menuBarIncludesCache: Bool = false) {
+                menuBarPeriod: MenuBarPeriod = .today, menuBarIncludesCache: Bool = false,
+                menuBarShowsNumber: Bool = true, onlineQuotaEnabled: Bool = true) {
+        self.menuBarShowsNumber = menuBarShowsNumber
+        self.onlineQuotaEnabled = onlineQuotaEnabled
         self.refreshIntervalSeconds = refreshIntervalSeconds
         self.menuBarProviderID = menuBarProviderID
         self.menuBarPeriod = menuBarPeriod
@@ -28,6 +35,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         menuBarProviderID = (try? c.decodeIfPresent(String.self, forKey: .menuBarProviderID)) ?? nil
         menuBarPeriod = (try? c.decodeIfPresent(MenuBarPeriod.self, forKey: .menuBarPeriod)) ?? d.menuBarPeriod
         menuBarIncludesCache = (try? c.decodeIfPresent(Bool.self, forKey: .menuBarIncludesCache)) ?? d.menuBarIncludesCache
+        menuBarShowsNumber = (try? c.decodeIfPresent(Bool.self, forKey: .menuBarShowsNumber)) ?? d.menuBarShowsNumber
+        onlineQuotaEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .onlineQuotaEnabled)) ?? d.onlineQuotaEnabled
     }
 }
 

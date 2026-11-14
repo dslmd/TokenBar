@@ -99,12 +99,34 @@ public struct Account: Codable, Identifiable, Equatable, Sendable {
     /// Config/home directory of the CLI (e.g. `~/.claude`, `$CODEX_HOME`).
     /// Its exact meaning is defined by the provider (`UsageProvider.dataPathHint`).
     public var dataPath: String
+    /// Per-account switch for online quota (network); local token counting is unaffected.
+    public var onlineQuotaEnabled: Bool
 
-    public init(id: UUID = UUID(), providerID: String, name: String, dataPath: String) {
+    public init(id: UUID = UUID(), providerID: String, name: String, dataPath: String, onlineQuotaEnabled: Bool = true) {
         self.id = id
         self.providerID = providerID
         self.name = name
         self.dataPath = dataPath
+        self.onlineQuotaEnabled = onlineQuotaEnabled
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        providerID = try c.decode(String.self, forKey: .providerID)
+        name = try c.decode(String.self, forKey: .name)
+        dataPath = try c.decode(String.self, forKey: .dataPath)
+        onlineQuotaEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .onlineQuotaEnabled)) ?? true
+    }
+}
+
+/// Tokens for one calendar day (start of day in the scan calendar).
+public struct DailyUsage: Equatable, Sendable {
+    public var day: Date
+    public var tokens: TokenBreakdown
+    public init(day: Date, tokens: TokenBreakdown = .zero) {
+        self.day = day
+        self.tokens = tokens
     }
 }
 
@@ -122,6 +144,9 @@ public struct AccountUsage: Equatable, Sendable {
     public var today: TokenBreakdown
     public var last7Days: TokenBreakdown
     public var month: TokenBreakdown
+    /// Seven entries, oldest first, ending with today.
+    public var daily: [DailyUsage]
+    /// Quota found in local logs (Codex only). Online quota is reported separately by `QuotaService`.
     public var quota: QuotaObservation?
     public var lastActivity: Date?
     public var updatedAt: Date
@@ -129,11 +154,13 @@ public struct AccountUsage: Equatable, Sendable {
     public var status: ScanStatus
 
     public init(today: TokenBreakdown = .zero, last7Days: TokenBreakdown = .zero, month: TokenBreakdown = .zero,
+                daily: [DailyUsage] = [],
                 quota: QuotaObservation? = nil, lastActivity: Date? = nil, updatedAt: Date,
                 filesTracked: Int = 0, status: ScanStatus = .ok) {
         self.today = today
         self.last7Days = last7Days
         self.month = month
+        self.daily = daily
         self.quota = quota
         self.lastActivity = lastActivity
         self.updatedAt = updatedAt

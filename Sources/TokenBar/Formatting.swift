@@ -20,6 +20,23 @@ enum Fmt {
         relativeFormatter.localizedString(for: date, relativeTo: now)
     }
 
+    private static let weekday: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "EEEEE"        // narrow weekday: 一 二 三 …
+        return f
+    }()
+
+    private static let dayMonth: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "zh_CN")
+        f.dateFormat = "M月d日"
+        return f
+    }()
+
+    static func weekdayInitial(_ d: Date) -> String { weekday.string(from: d) }
+    static func dayMonth(_ d: Date) -> String { dayMonth.string(from: d) }
+
     static func clockTime(_ date: Date) -> String { clock.string(from: date) }
 
     static func tokens(_ n: Int) -> String { TokenFormatter.compact(n) }
