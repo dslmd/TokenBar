@@ -796,7 +796,13 @@ final class LoginTests: XCTestCase {
         XCTAssertEqual(mode(scriptPath), 0o700)
         let out = try runShell(scriptPath, [], path: "/usr/bin:/bin", extraEnv: ["GEMINI_FORCE_ENCRYPTED_FILE_STORAGE": "true"])
         let realHome = SystemLoginFileSystem().realPath(home)!
-        XCTAssertEqual(out, "\(home)|\(realHome)|unset")
+        // The shell reports its directory as it was spelled; on macOS the temporary folder sits behind a
+        // symbolic link (/var -> /private/var), so compare the resolved paths.
+        let parts = out.components(separatedBy: "|")
+        XCTAssertEqual(parts.count, 3, out)
+        XCTAssertEqual(parts.first, home)
+        XCTAssertEqual(parts.count > 1 ? SystemLoginFileSystem().realPath(parts[1]) : nil, realHome)
+        XCTAssertEqual(parts.last, "unset")
         XCTAssertFalse(FileManager.default.fileExists(atPath: scriptPath), "script deletes itself")
         let pid = try String(contentsOfFile: scriptDir + "/pid", encoding: .utf8).trimmingCharacters(in: .whitespacesAndNewlines)
         XCTAssertNotNil(Int32(pid))
