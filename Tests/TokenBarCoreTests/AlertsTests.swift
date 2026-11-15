@@ -101,9 +101,8 @@ final class QuotaAlertsTests: XCTestCase {
 
     func testSignInProblemOnlyForIssuesTheUserFixes() {
         XCTAssertEqual(QuotaAlerts.signInProblem(for: .loginExpired(cli: "claude")), "Sign-in expired. Run claude once to renew it.")
-        XCTAssertNotNil(QuotaAlerts.signInProblem(for: .cannotWriteBack(cli: "codex")))
         XCTAssertNotNil(QuotaAlerts.signInProblem(for: .accessDenied))
-        for issue: QuotaIssue? in [nil, .network, .server(500), .disabled, .unsupported, .notSignedIn, .other] {
+        for issue: QuotaIssue? in [nil, .network, .server(500), .disabled, .unsupported, .notSignedIn, .other, .cannotWriteBack(cli: "claude")] {
             XCTAssertNil(QuotaAlerts.signInProblem(for: issue))
         }
     }

@@ -50,6 +50,8 @@ final class AppModel: ObservableObject {
     private var isRefreshingWebQuota = false
     private var sweptLeftovers = false
     private var timerTask: Task<Void, Never>?
+    /// Last good online quota per account, kept across launches (see `QuotaCache`).
+    private var quotaCache = QuotaCache()
     private var refreshQueued = false
     private var lastScan: Date?
     private static let rescanInterval: TimeInterval = 300
@@ -74,7 +76,13 @@ final class AppModel: ObservableObject {
         isDemo = false
         secrets = KeychainSecretStore()
         quotaService = QuotaService.standard(keychain: { service in KeychainBlobStore(service: service) })
-        config = store.load() ?? AppConfig()
+        let loaded = store.load() ?? AppConfig()
+        config = loaded
+        let cache = QuotaCache.load(from: QuotaCache.defaultURL)
+        quotaCache = cache
+        // Show the last known quota right away, until the first refresh.
+        quota = cache.filling(Dictionary(uniqueKeysWithValues: loaded.accounts.map { ($0.id, QuotaResult()) }), now: Date())
+            .filter { $0.value.observation != nil }
         // Stateless Keychain access: a second instance reads the same items as `secrets`.
         museService = MuseAIService(secrets: KeychainSecretStore())
         let driver = CLILoginDriver(managedRoot: Self.managedRoot)
@@ -281,7 +289,10 @@ final class AppModel: ObservableObject {
             let result = await quotaService.refresh(accounts: accounts,
                                                     enabled: config.settings.onlineQuotaEnabled, force: forceNext)
             let live = Set(catalog.cliQuotaAccounts(enabledAccounts).map(\.id))
-            quota = result.filter { live.contains($0.key) }
+            let current = result.filter { live.contains($0.key) }
+            quotaCache.record(current, existing: Set(config.accounts.map(\.id)), now: Date())
+            try? quotaCache.save(to: QuotaCache.defaultURL)
+            quota = quotaCache.filling(current, now: Date())
             forceNext = true
         } while quotaRefreshQueued
         evaluateAlerts()

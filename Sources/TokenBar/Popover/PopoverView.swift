@@ -369,6 +369,12 @@ struct PopoverAccountRow: View {
             QuotaSummaryText(summary: summary)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        case .note(let text):
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
         case .lastActive(let date):
             Text("Last active \(AgoPhrase.since(date, now: now))")
                 .font(.caption)

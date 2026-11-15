@@ -33,12 +33,21 @@ public enum QuotaIssue: Error, Equatable, Sendable {
         case .unsupported: return "Online quota is not available for this provider."
         case .notSignedIn: return "No sign-in found."
         case .loginExpired(let cli): return "Sign-in expired. Run \(cli) once to renew it."
-        case .cannotWriteBack(let cli): return "Can't renew the sign-in safely. Run \(cli) once to renew it."
+        case .cannotWriteBack(let cli): return "Quota updates after \(cli) renews its sign-in. Run \(cli) once to update it now."
         case .accessDenied: return "No permission to read the sign-in."
         case .network: return "Network unavailable, will retry."
         case .server(let code): return "Quota service error (\(code))."
         case .other: return "Couldn't load online quota."
         }
+    }
+}
+
+public extension QuotaIssue {
+    /// The CLI's saved sign-in has expired and only the CLI itself may renew it (TokenBar never writes
+    /// another app's Keychain item). Routine, not a problem: it resolves the next time the CLI runs.
+    var isAwaitingCLIRenewal: Bool {
+        if case .cannotWriteBack = self { return true }
+        return false
     }
 }
 

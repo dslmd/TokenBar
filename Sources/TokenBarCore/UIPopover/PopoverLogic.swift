@@ -123,6 +123,8 @@ public enum AccountRowLine: Equatable, Sendable {
     /// Muse with online quota off: nothing can be read.
     case onlineQuotaOff
     case quota(QuotaSummary)
+    /// No quota to show yet for a routine reason, e.g. waiting for the CLI to renew its sign-in.
+    case note(String)
     /// No quota (Muse Code, or no window known): "Last active 1 day ago".
     case lastActive(Date)
     case noRecentUsage
@@ -138,9 +140,13 @@ public enum AccountRowLine: Equatable, Sendable {
         public var windows: [QuotaWindow]
         public var lastActivity: Date?
         public var noRecentData: Bool
+        /// Why there is no quota, when it is routine (`QuotaIssue.isAwaitingCLIRenewal`).
+        public var quotaNote: String?
 
         public init(kind: AccountDetailKind, hasData: Bool, attention: String? = nil, onlineQuotaOn: Bool = true,
-                    windows: [QuotaWindow] = [], lastActivity: Date? = nil, noRecentData: Bool = false) {
+                    windows: [QuotaWindow] = [], lastActivity: Date? = nil, noRecentData: Bool = false,
+                    quotaNote: String? = nil) {
+            self.quotaNote = quotaNote
             self.kind = kind
             self.hasData = hasData
             self.attention = attention
@@ -165,6 +171,7 @@ public enum AccountRowLine: Equatable, Sendable {
             }
             // Say why the quota bar is missing, as the Muse rows do. Quota from local logs still wins above.
             if input.windows.isEmpty && !input.onlineQuotaOn { return .onlineQuotaOff }
+            if let note = input.quotaNote { return .note(note) }
         }
         if let last = input.lastActivity { return .lastActive(last) }
         return input.noRecentData ? .noRecentUsage : .none

@@ -155,6 +155,9 @@ private struct AccountDetailContent: View {
                 }
                 if let attention, !usageProblem {
                     AttentionLine(text: attention)
+                } else if let issue = model.quota[account.id]?.issue, issue.isAwaitingCLIRenewal {
+                    // Routine: the CLI renews its own sign-in the next time it runs.
+                    StatusLine(systemImage: "clock", text: issue.message)
                 } else if quota.windows.isEmpty {
                     if !model.onlineQuotaIsOn(for: account) {
                         StatusLine(systemImage: "wifi.slash", text: "Online quota is off. Turn it on in Settings to see quota.")

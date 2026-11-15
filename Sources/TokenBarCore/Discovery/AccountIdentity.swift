@@ -20,8 +20,21 @@ public struct AccountIdentity: Equatable, Sendable {
     /// Short plan label for the UI, e.g. "Pro" or "Max".
     public var planLabel: String? {
         guard let p = plan?.trimmingCharacters(in: .whitespaces), !p.isEmpty else { return nil }
+        // Plan codes written as one word (Codex stores "prolite").
+        if let known = Self.joinedPlanCodes[p.lowercased()] { return known }
         let words = p.replacingOccurrences(of: "_", with: " ").replacingOccurrences(of: "-", with: " ").split(separator: " ")
         return words.map { $0.prefix(1).uppercased() + $0.dropFirst() }.joined(separator: " ")
+    }
+}
+
+extension AccountIdentity {
+    static let joinedPlanCodes = ["prolite": "Pro Lite", "proplus": "Pro Plus", "maxplus": "Max Plus"]
+
+    /// Claude names a personal organization "<email>'s Organization"; that repeats the email and says nothing.
+    static func meaningfulOrganization(_ name: String?, email: String?) -> String? {
+        guard let name = name?.trimmingCharacters(in: .whitespaces), !name.isEmpty else { return nil }
+        if let email, name.caseInsensitiveCompare("\(email)'s Organization") == .orderedSame { return nil }
+        return name
     }
 }
 
@@ -52,7 +65,7 @@ public enum AccountIdentityReader {
             guard let data = fs.contents(of: file, maxBytes: maxConfigBytes), let root = JSON.object(data),
                   let account = root["oauthAccount"] as? [String: Any] else { continue }
             identity.email = JSON.string(account["emailAddress"])
-            identity.organization = JSON.string(account["organizationName"])
+            identity.organization = AccountIdentity.meaningfulOrganization(JSON.string(account["organizationName"]), email: identity.email)
             identity.isSignedIn = identity.email != nil || JSON.string(account["accountUuid"]) != nil
             break
         }

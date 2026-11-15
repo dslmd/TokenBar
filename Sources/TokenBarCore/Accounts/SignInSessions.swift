@@ -135,7 +135,7 @@ public enum AccountHealth: Equatable, Sendable {
         case .dataDirectoryMissing: return (.error, "Folder not found")
         case .ok, .noRecentData: break
         }
-        if let issue = quota?.issue, issue != .disabled, issue != .unsupported {
+        if let issue = quota?.issue, issue != .disabled, issue != .unsupported, !issue.isAwaitingCLIRenewal {
             return (.warning, issue.message)
         }
         return (.ok, usage.status == .noRecentData ? "No usage this month" : "Working")

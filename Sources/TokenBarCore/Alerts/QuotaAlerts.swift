@@ -97,7 +97,8 @@ public enum QuotaAlerts {
     /// by signing in (network trouble, server errors, quota turned off).
     public static func signInProblem(for issue: QuotaIssue?) -> String? {
         switch issue {
-        case .loginExpired?, .cannotWriteBack?, .accessDenied?: return issue?.message
+        // Waiting for the CLI to renew its own sign-in (cannotWriteBack) is routine and resolves itself.
+        case .loginExpired?, .accessDenied?: return issue?.message
         default: return nil
         }
     }

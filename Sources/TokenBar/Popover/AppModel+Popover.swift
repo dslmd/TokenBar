@@ -28,7 +28,8 @@ extension AppModel {
         let input = AccountRowLine.Input(kind: kind, hasData: hasData, attention: attentionMessage(for: account),
                                          onlineQuotaOn: onlineQuotaIsOn(for: account),
                                          windows: quotaWindows(for: account).windows,
-                                         lastActivity: usage?.lastActivity, noRecentData: usage?.status == .noRecentData)
+                                         lastActivity: usage?.lastActivity, noRecentData: usage?.status == .noRecentData,
+                                         quotaNote: quota[account.id]?.issue.flatMap { $0.isAwaitingCLIRenewal ? $0.message : nil })
         return AccountRowLine.resolve(input, now: now)
     }
 
