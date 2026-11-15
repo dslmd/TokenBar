@@ -38,13 +38,27 @@ enum PopoverStyle {
         }
     }
 
-    /// Color for a percentage in text: only elevated and critical stand out.
+    /// Color for a percentage in text: only elevated and critical stand out. Small text over the translucent
+    /// window needs more contrast than a bar does, so the system color is darkened in light mode and
+    /// lightened in dark mode.
     static func textTint(_ level: QuotaLevel) -> Color? {
         switch level {
-        case .elevated: return .orange
-        case .critical: return .red
+        case .elevated: return orangeText
+        case .critical: return redText
         case .normal, .stale: return nil
         }
+    }
+
+    private static let redText = readableText(.systemRed)
+    private static let orangeText = readableText(.systemOrange)
+
+    private static func readableText(_ base: NSColor) -> Color {
+        Color(nsColor: NSColor(name: nil) { appearance in
+            if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+                return base.blended(withFraction: 0.25, of: .white) ?? base
+            }
+            return base.blended(withFraction: 0.22, of: .black) ?? base
+        })
     }
 }
 
