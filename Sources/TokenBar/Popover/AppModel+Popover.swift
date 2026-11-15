@@ -47,6 +47,10 @@ extension AppModel {
         return read.reduce(0) { $0 + displayTotal($1.today) }
     }
 
-    /// Today's total for the header; nil while nothing has been read (or no account has token counts).
-    var heroTodayTokens: Int? { todayTokens(of: enabledAccounts) }
+    /// The header's big line: today's tokens over the accounts that count tokens.
+    var heroLine: HeroLine {
+        let tokenAccounts = enabledAccounts.filter { capabilities(of: $0.providerID)?.localLogs == true }
+        return HeroLine.resolve(tokenAccountCount: tokenAccounts.count,
+                                readToday: tokenAccounts.compactMap { usage[$0.id] }.map { displayTotal($0.today) })
+    }
 }

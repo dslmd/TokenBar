@@ -187,3 +187,27 @@ final class NewSettingsTests: XCTestCase {
         XCTAssertEqual(MenuBarSummary.title(accounts: [], usage: [:], settings: settings, peakQuotaPercent: 93.7), "–")
     }
 }
+
+final class HeaderAndWarningTests: XCTestCase {
+    func testHeroLine() {
+        XCTAssertEqual(HeroLine.resolve(tokenAccountCount: 0, readToday: []), .quotaOnly)
+        XCTAssertEqual(HeroLine.resolve(tokenAccountCount: 2, readToday: []), .reading)
+        XCTAssertEqual(HeroLine.resolve(tokenAccountCount: 2, readToday: [1200, 300]), .tokens(1500))
+        XCTAssertEqual(HeroLine.quotaOnly.title, "Quota")
+        XCTAssertEqual(HeroLine.reading.title, "Today")
+    }
+
+    func testWarningLooksAtEveryProvider() {
+        let now = TestSupport.now
+        let claude = Account(providerID: "claude", name: "a", dataPath: "~/.claude")
+        let codex = Account(providerID: "codex", name: "b", dataPath: "~/.codex")
+        let quota = [codex.id: QuotaResult(observation: QuotaObservation(observedAt: now, windows: [
+            QuotaWindow(label: "Weekly", usedPercent: 95, resetsAt: now.addingTimeInterval(3600))]))]
+        let limited = QuotaMerge.peakPercent(accounts: [claude, codex], usage: [:], quota: quota, providerID: "claude", now: now)
+        let all = QuotaMerge.peakPercent(accounts: [claude, codex], usage: [:], quota: quota, providerID: nil, now: now)
+        XCTAssertNil(limited)
+        XCTAssertFalse(MenuBarSummary.showsWarning(peakQuotaAcrossAllPercent: limited))
+        XCTAssertTrue(MenuBarSummary.showsWarning(peakQuotaAcrossAllPercent: all))
+        XCTAssertFalse(MenuBarSummary.showsWarning(peakQuotaAcrossAllPercent: 89.9))
+    }
+}

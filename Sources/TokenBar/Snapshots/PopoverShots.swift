@@ -37,6 +37,12 @@ enum PopoverShots {
             .init(name: "popover-quota-reset", scenario: .rich, menuBarWindow: true, tweak: Tweak.claudeQuotaReset, content: popover),
             .init(name: "popover-no-recent-usage", scenario: .rich, menuBarWindow: true, tweak: Tweak.geminiIdle, content: popover),
             .init(name: "popover-long-names", scenario: .rich, menuBarWindow: true, tweak: Tweak.longNames, content: popover),
+            .init(name: "popover-muse-only", scenario: .rich, menuBarWindow: true,
+                  tweak: { state in
+                      for i in state.config.accounts.indices where state.config.accounts[i].providerID != "museai" {
+                          state.config.accounts[i].isEnabled = false
+                      }
+                  }, content: popover),
 
             // Account detail
             .init(name: "popover-detail-claude", scenario: .rich, menuBarWindow: true, content: detail(Demo.claudeMain)),
@@ -64,6 +70,8 @@ enum PopoverShots {
                   tweak: { $0.config.settings.menuBarMetric = .peakQuota }, content: menuBar),
             .init(name: "popover-menubar-icon-only", scenario: .rich,
                   tweak: { $0.config.settings.menuBarShowsNumber = false }, content: menuBar),
+            .init(name: "popover-menubar-warning-other-provider", scenario: .rich,
+                  tweak: { $0.config.settings.menuBarProviderID = "gemini" }, content: menuBar),
             .init(name: "popover-menubar-normal", scenario: .sparse, content: menuBar),
             .init(name: "popover-menubar-empty", scenario: .empty, content: menuBar),
         ]

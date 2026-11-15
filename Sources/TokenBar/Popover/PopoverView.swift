@@ -114,9 +114,10 @@ struct PopoverHeader: View {
     let now: Date
 
     var body: some View {
+        let hero = model.heroLine
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .center, spacing: 4) {
-                Text("Today")
+                Text(hero.title)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(.secondary)
                 Spacer()
@@ -124,7 +125,8 @@ struct PopoverHeader: View {
                 PopoverMoreMenu()
             }
             HStack(alignment: .firstTextBaseline, spacing: 5) {
-                if let total = model.heroTodayTokens {
+                switch hero {
+                case .tokens(let total):
                     Text(PopoverText.heroTokens(total))
                         .font(.system(size: 28, weight: .semibold, design: .rounded))
                         .monospacedDigit()
@@ -132,12 +134,15 @@ struct PopoverHeader: View {
                     Text("tokens")
                         .font(.title3)
                         .foregroundStyle(.secondary)
-                } else {
+                case .reading:
                     // Same height as the number, so the header does not jump when the first numbers arrive.
                     Text("Reading…")
                         .font(.title3)
                         .foregroundStyle(.secondary)
                         .frame(height: 34, alignment: .center)
+                case .quotaOnly:
+                    // No account counts tokens (e.g. only Muse): the quota line below is the whole story.
+                    EmptyView()
                 }
             }
             .accessibilityElement(children: .combine)

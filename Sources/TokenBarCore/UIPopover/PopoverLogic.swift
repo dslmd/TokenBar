@@ -192,6 +192,28 @@ public enum AgoPhrase {
     }
 }
 
+/// What the big line at the top of the overview shows.
+public enum HeroLine: Equatable, Sendable {
+    /// Today's tokens over the accounts that have token counts.
+    case tokens(Int)
+    /// Token accounts exist but none has been read yet.
+    case reading
+    /// No enabled account has token counts (e.g. only Muse): the header shows quota only.
+    case quotaOnly
+
+    /// - Parameters:
+    ///   - tokenAccountCount: enabled accounts whose provider counts tokens from local logs.
+    ///   - readToday: today's totals of those accounts that have been read.
+    public static func resolve(tokenAccountCount: Int, readToday: [Int]) -> HeroLine {
+        guard tokenAccountCount > 0 else { return .quotaOnly }
+        guard !readToday.isEmpty else { return .reading }
+        return .tokens(readToday.reduce(0, +))
+    }
+
+    /// Small title above the hero line.
+    public var title: String { self == .quotaOnly ? "Quota" : "Today" }
+}
+
 /// Small texts of the overview and the detail page.
 public enum PopoverText {
     /// "Updated 1 min ago", or "Reading…" before the first refresh.

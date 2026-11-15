@@ -19,6 +19,13 @@ public enum MenuBarSummary {
             .reduce(0) { $0 + tokens(for: $1, period: settings.menuBarPeriod, includeCache: settings.menuBarIncludesCache) }
     }
 
+    /// Whether the menu bar symbol turns into a warning. Takes the highest quota over every enabled account,
+    /// not only the provider the menu bar number is limited to, so a limit is never hidden by that setting.
+    public static func showsWarning(peakQuotaAcrossAllPercent: Double?) -> Bool {
+        guard let peak = peakQuotaAcrossAllPercent else { return false }
+        return QuotaLevel(percent: peak) == .critical
+    }
+
     /// - Parameter peakQuotaPercent: highest current quota percentage, used when the metric is `.peakQuota`.
     public static func title(accounts: [Account], usage: [UUID: AccountUsage], settings: AppSettings,
                              peakQuotaPercent: Double? = nil) -> String {

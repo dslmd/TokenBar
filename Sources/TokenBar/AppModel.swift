@@ -189,15 +189,19 @@ final class AppModel: ObservableObject {
         updateSettings { $0.hasCompletedOnboarding = true }
     }
 
-    /// Warning state for the menu bar icon: any current quota window above 90 %.
+    /// Highest current quota for the menu bar number, limited to the menu bar's provider when one is set.
     /// Muse accounts count here (their weekly quota) but never towards the token number.
-    var peakQuotaPercent: Double? {
+    var peakQuotaPercent: Double? { peakQuota(providerID: config.settings.menuBarProviderID) }
+
+    /// Warning state for the menu bar icon: any current quota window of any enabled account at 90 %+.
+    var menuBarWarning: Bool { MenuBarSummary.showsWarning(peakQuotaAcrossAllPercent: peakQuota(providerID: nil)) }
+
+    private func peakQuota(providerID: String?) -> Double? {
         let online = quota.merging(MuseAIAccounts.quotaResults(webQuota)) { cli, _ in cli }
         return QuotaMerge.peakPercent(accounts: enabledAccounts, usage: usage, quota: online,
-                                      providerID: config.settings.menuBarProviderID, now: Date())
+                                      providerID: providerID, now: Date())
     }
 
-    var menuBarWarning: Bool { (peakQuotaPercent ?? 0) >= 90 }
     var menuBarSymbol: String { menuBarWarning ? "exclamationmark.triangle.fill" : "chart.bar.fill" }
 
     /// Number shown in cards, following the "include cache" preference of the menu bar.
