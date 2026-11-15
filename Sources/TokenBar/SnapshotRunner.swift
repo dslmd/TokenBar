@@ -23,6 +23,8 @@ enum SnapshotRunner {
         /// Tab to select in the first `NSTabView` found (settings).
         var tabIndex: Int?
         let content: () -> AnyView
+        /// Measured as the MenuBarExtra window measures its content (see `capture`).
+        var sizesLikeMenuBarWindow: Bool { name.hasPrefix("popover") }
     }
 
     static var shots: [Shot] {
@@ -145,6 +147,12 @@ enum SnapshotRunner {
         host.layoutSubtreeIfNeeded()
         var ideal = host.intrinsicContentSize
         if ideal.width < 1 || ideal.height < 1 { ideal = host.fittingSize }
+        if shot.sizesLikeMenuBarWindow {
+            // The menu bar window ends up at the size the view takes when offered no room at all (seen on
+            // macOS 27), not at its ideal size. Measure the same way, so a view that collapses there
+            // collapses here too.
+            ideal = NSHostingController(rootView: AnyView(root)).sizeThatFits(in: .zero)
+        }
         host.sizingOptions = []
         guard ideal.width >= 1, ideal.height >= 1, ideal.width < 4000, ideal.height < 8000 else {
             say("FAILED \(shot.name): the view reported an unusable size \(ideal)")

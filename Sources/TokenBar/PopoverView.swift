@@ -25,24 +25,25 @@ struct PopoverView: View {
             if model.enabledAccounts.isEmpty {
                 EmptyState()
             } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        ForEach(model.catalog.providers) { provider in
-                            let accounts = model.enabledAccounts(for: provider.id)
-                            if !accounts.isEmpty {
-                                ProviderSection(
-                                    provider: provider,
-                                    accounts: accounts,
-                                    isCollapsed: collapsed.contains(provider.id),
-                                    onToggle: {
-                                        withAnimation(reduceMotion ? nil : Animation.easeInOut(duration: 0.2)) { toggle(provider.id) }
-                                    })
+                ContentHeightUpTo(cap: 520) {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) {
+                            ForEach(model.catalog.providers) { provider in
+                                let accounts = model.enabledAccounts(for: provider.id)
+                                if !accounts.isEmpty {
+                                    ProviderSection(
+                                        provider: provider,
+                                        accounts: accounts,
+                                        isCollapsed: collapsed.contains(provider.id),
+                                        onToggle: {
+                                            withAnimation(reduceMotion ? nil : Animation.easeInOut(duration: 0.2)) { toggle(provider.id) }
+                                        })
+                                }
                             }
                         }
+                        .padding(12)
                     }
-                    .padding(12)
                 }
-                .frame(maxHeight: 520)
             }
             Divider()
             footer
@@ -481,5 +482,23 @@ struct QuotaBar: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(window.label) \(Int(window.usedPercent.rounded()))% used")
+    }
+}
+
+/// Gives its single child (the scroll view) the height of the child's content, up to `cap`, whatever
+/// height it is offered. The menu bar window sizes itself to its content offered no room at all, and a
+/// plain scroll view then shrinks to nothing, so the account list would disappear.
+private struct ContentHeightUpTo: Layout {
+    let cap: CGFloat
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let child = subviews.first else { return .zero }
+        let width = proposal.width.flatMap { $0 > 0 ? $0 : nil }
+        let content = child.sizeThatFits(ProposedViewSize(width: width, height: nil))
+        return CGSize(width: width ?? content.width, height: min(content.height, cap))
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
     }
 }
