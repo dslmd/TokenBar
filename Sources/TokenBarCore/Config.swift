@@ -4,7 +4,19 @@ public enum MenuBarPeriod: String, Codable, CaseIterable, Sendable {
     case today, last7Days, month
 }
 
+/// What the number next to the menu bar icon shows.
+public enum MenuBarMetric: String, Codable, CaseIterable, Sendable {
+    /// Tokens for `menuBarPeriod`.
+    case tokens
+    /// The highest current quota percentage, e.g. "93%".
+    case peakQuota
+}
+
 public struct AppSettings: Codable, Equatable, Sendable {
+    public static let defaultQuotaAlertThreshold = 90
+    /// Thresholds offered in settings.
+    public static let quotaAlertThresholdChoices = [75, 90, 95]
+
     public var refreshIntervalSeconds: Int
     /// nil = sum over all providers.
     public var menuBarProviderID: String?
@@ -15,16 +27,35 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var menuBarShowsNumber: Bool
     /// Global switch for online quota (network access). Default on.
     public var onlineQuotaEnabled: Bool
+    /// What the menu bar number shows. Default tokens.
+    public var menuBarMetric: MenuBarMetric
+    /// False until the first-launch setup window was finished or closed.
+    public var hasCompletedOnboarding: Bool
+    /// Notify when a quota window reaches this percentage; nil = no quota notifications.
+    public var quotaAlertThreshold: Int?
+    /// Notify when an account's sign-in expires or needs attention.
+    public var signInAlertsEnabled: Bool
 
     public init(refreshIntervalSeconds: Int = 60, menuBarProviderID: String? = nil,
                 menuBarPeriod: MenuBarPeriod = .today, menuBarIncludesCache: Bool = false,
-                menuBarShowsNumber: Bool = true, onlineQuotaEnabled: Bool = true) {
+                menuBarShowsNumber: Bool = true, onlineQuotaEnabled: Bool = true,
+                menuBarMetric: MenuBarMetric = .tokens, hasCompletedOnboarding: Bool = false,
+                quotaAlertThreshold: Int? = AppSettings.defaultQuotaAlertThreshold, signInAlertsEnabled: Bool = true) {
+        self.menuBarMetric = menuBarMetric
+        self.hasCompletedOnboarding = hasCompletedOnboarding
+        self.quotaAlertThreshold = quotaAlertThreshold
+        self.signInAlertsEnabled = signInAlertsEnabled
         self.menuBarShowsNumber = menuBarShowsNumber
         self.onlineQuotaEnabled = onlineQuotaEnabled
         self.refreshIntervalSeconds = refreshIntervalSeconds
         self.menuBarProviderID = menuBarProviderID
         self.menuBarPeriod = menuBarPeriod
         self.menuBarIncludesCache = menuBarIncludesCache
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case refreshIntervalSeconds, menuBarProviderID, menuBarPeriod, menuBarIncludesCache, menuBarShowsNumber,
+             onlineQuotaEnabled, menuBarMetric, hasCompletedOnboarding, quotaAlertThreshold, signInAlertsEnabled
     }
 
     // Tolerant decoding: unknown/missing keys fall back to defaults.
@@ -37,6 +68,30 @@ public struct AppSettings: Codable, Equatable, Sendable {
         menuBarIncludesCache = (try? c.decodeIfPresent(Bool.self, forKey: .menuBarIncludesCache)) ?? d.menuBarIncludesCache
         menuBarShowsNumber = (try? c.decodeIfPresent(Bool.self, forKey: .menuBarShowsNumber)) ?? d.menuBarShowsNumber
         onlineQuotaEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .onlineQuotaEnabled)) ?? d.onlineQuotaEnabled
+        menuBarMetric = (try? c.decodeIfPresent(MenuBarMetric.self, forKey: .menuBarMetric)) ?? d.menuBarMetric
+        hasCompletedOnboarding = (try? c.decodeIfPresent(Bool.self, forKey: .hasCompletedOnboarding)) ?? d.hasCompletedOnboarding
+        signInAlertsEnabled = (try? c.decodeIfPresent(Bool.self, forKey: .signInAlertsEnabled)) ?? d.signInAlertsEnabled
+        // A stored 0 means "off" (nil is not written by the encoder); a missing key means the default.
+        if c.contains(.quotaAlertThreshold) {
+            let stored = (try? c.decodeIfPresent(Int.self, forKey: .quotaAlertThreshold)) ?? 0
+            quotaAlertThreshold = (1...100).contains(stored) ? stored : nil
+        } else {
+            quotaAlertThreshold = d.quotaAlertThreshold
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(refreshIntervalSeconds, forKey: .refreshIntervalSeconds)
+        try c.encodeIfPresent(menuBarProviderID, forKey: .menuBarProviderID)
+        try c.encode(menuBarPeriod, forKey: .menuBarPeriod)
+        try c.encode(menuBarIncludesCache, forKey: .menuBarIncludesCache)
+        try c.encode(menuBarShowsNumber, forKey: .menuBarShowsNumber)
+        try c.encode(onlineQuotaEnabled, forKey: .onlineQuotaEnabled)
+        try c.encode(menuBarMetric, forKey: .menuBarMetric)
+        try c.encode(hasCompletedOnboarding, forKey: .hasCompletedOnboarding)
+        try c.encode(quotaAlertThreshold ?? 0, forKey: .quotaAlertThreshold)
+        try c.encode(signInAlertsEnabled, forKey: .signInAlertsEnabled)
     }
 }
 
@@ -46,12 +101,16 @@ public struct AppConfig: Codable, Equatable, Sendable {
     public var settings: AppSettings
     /// Directories the user removed (`provider|resolved path`), so automatic detection does not add them back.
     public var dismissedAccounts: [String]
+    /// Notifications already shown (see `QuotaAlerts`), so they are not repeated after a relaunch.
+    public var alertLedger: [String]
 
-    public init(version: Int = 1, accounts: [Account] = [], settings: AppSettings = AppSettings(), dismissedAccounts: [String] = []) {
+    public init(version: Int = 1, accounts: [Account] = [], settings: AppSettings = AppSettings(), dismissedAccounts: [String] = [],
+                alertLedger: [String] = []) {
         self.version = version
         self.accounts = accounts
         self.settings = settings
         self.dismissedAccounts = dismissedAccounts
+        self.alertLedger = alertLedger
     }
 
     public init(from decoder: Decoder) throws {
@@ -61,6 +120,7 @@ public struct AppConfig: Codable, Equatable, Sendable {
         accounts = ((try? c.decodeIfPresent([LossyAccount].self, forKey: .accounts)) ?? []).compactMap(\.account)
         settings = (try? c.decodeIfPresent(AppSettings.self, forKey: .settings)) ?? AppSettings()
         dismissedAccounts = (try? c.decodeIfPresent([String].self, forKey: .dismissedAccounts)) ?? []
+        alertLedger = (try? c.decodeIfPresent([String].self, forKey: .alertLedger)) ?? []
     }
 }
 

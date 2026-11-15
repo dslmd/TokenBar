@@ -19,8 +19,16 @@ public enum MenuBarSummary {
             .reduce(0) { $0 + tokens(for: $1, period: settings.menuBarPeriod, includeCache: settings.menuBarIncludesCache) }
     }
 
-    public static func title(accounts: [Account], usage: [UUID: AccountUsage], settings: AppSettings) -> String {
-        if usage.isEmpty { return "–" }
-        return TokenFormatter.compact(total(accounts: accounts, usage: usage, settings: settings))
+    /// - Parameter peakQuotaPercent: highest current quota percentage, used when the metric is `.peakQuota`.
+    public static func title(accounts: [Account], usage: [UUID: AccountUsage], settings: AppSettings,
+                             peakQuotaPercent: Double? = nil) -> String {
+        switch settings.menuBarMetric {
+        case .tokens:
+            if usage.isEmpty { return "–" }
+            return TokenFormatter.compact(total(accounts: accounts, usage: usage, settings: settings))
+        case .peakQuota:
+            guard let peak = peakQuotaPercent else { return "–" }
+            return "\(Int(min(100, max(0, peak)).rounded(.down)))%"
+        }
     }
 }

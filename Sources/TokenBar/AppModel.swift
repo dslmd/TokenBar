@@ -28,6 +28,9 @@ final class AppModel: ObservableObject {
     /// Short message after a Muse sign-in that could not be saved.
     @Published private(set) var webSignInMessage: String?
 
+    /// Receives notifications decided by `QuotaAlerts` after each refresh (set by the app at launch).
+    var deliverAlerts: (([PendingAlert]) -> Void)?
+
     let registry = ProviderRegistry.default
     let catalog = ProviderCatalog.default
     let secrets: SecretStore
@@ -64,7 +67,7 @@ final class AppModel: ObservableObject {
         return root
     }
 
-    /// The live model, for the app delegate's termination hook.
+    /// The live model (demo or real), for the app delegate's launch and termination hooks.
     private(set) static weak var current: AppModel?
 
     init() {
@@ -107,6 +110,7 @@ final class AppModel: ObservableObject {
         hasScanned = demo.hasScanned
         isScanning = demo.isScanning
         lastRefresh = demo.lastRefresh
+        Self.current = self
     }
 
     /// The model for a normal launch, or a demo model for `TokenBar --demo [scenario]` (default `rich`;
@@ -133,7 +137,48 @@ final class AppModel: ObservableObject {
     var settings: AppSettings { config.settings }
 
     var menuBarTitle: String {
-        MenuBarSummary.title(accounts: enabledAccounts, usage: usage, settings: config.settings)
+        MenuBarSummary.title(accounts: enabledAccounts, usage: usage, settings: config.settings,
+                             peakQuotaPercent: peakQuotaPercent)
+    }
+
+    /// Today's tokens over all enabled accounts (cache counted as the menu bar setting says).
+    var todayTotal: Int {
+        enabledAccounts.compactMap { usage[$0.id] }.reduce(0) { $0 + displayTotal($1.today) }
+    }
+
+    /// Current quota windows of an account: online data when present, otherwise from local logs; for
+    /// Muse, the weekly window read from muse.ai.
+    func quotaWindows(for account: Account) -> (windows: [QuotaWindow], observedAt: Date?, isOnline: Bool) {
+        if catalog.capabilities(of: account.providerID)?.onlineQuota == .webSession {
+            guard let usage = webQuota[account.id]?.usage else { return ([], nil, true) }
+            return (usage.windows, usage.observedAt, true)
+        }
+        guard let effective = QuotaMerge.effective(local: usage[account.id]?.quota, online: quota[account.id]?.observation) else {
+            return ([], nil, false)
+        }
+        return (effective.observation.windows, effective.observation.observedAt, effective.isOnline)
+    }
+
+    /// The window closest to running out, for one-line summaries.
+    func peakWindow(for account: Account, now: Date = Date()) -> QuotaWindow? {
+        QuotaMerge.peakWindow(quotaWindows(for: account).windows, now: now)
+    }
+
+    /// A problem the user has to act on (expired sign-in, missing folder), as a sentence; nil when none.
+    func attentionMessage(for account: Account) -> String? {
+        let (health, text) = health(of: account)
+        switch health {
+        case .warning, .error: return text
+        default: return nil
+        }
+    }
+
+    /// Whether the first-launch setup window should open.
+    var needsOnboarding: Bool { !isDemo && !config.settings.hasCompletedOnboarding }
+
+    func completeOnboarding() {
+        guard !config.settings.hasCompletedOnboarding else { return }
+        updateSettings { $0.hasCompletedOnboarding = true }
     }
 
     /// Warning state for the menu bar icon: any current quota window above 90 %.
@@ -239,6 +284,7 @@ final class AppModel: ObservableObject {
             quota = result.filter { live.contains($0.key) }
             forceNext = true
         } while quotaRefreshQueued
+        evaluateAlerts()
     }
 
     /// Muse accounts. The service throttles itself; with online quota off (globally or for the account)
@@ -257,6 +303,7 @@ final class AppModel: ObservableObject {
         }
         let live = Set(catalog.webQuotaTargets(config.accounts, onlineQuotaEnabled: config.settings.onlineQuotaEnabled))
         webQuota = states.filter { live.contains($0.key) }
+        evaluateAlerts()
     }
 
     private func refreshWebQuota(accountID id: UUID) async {
@@ -266,6 +313,47 @@ final class AppModel: ObservableObject {
         if catalog.webQuotaTargets(config.accounts, onlineQuotaEnabled: config.settings.onlineQuotaEnabled).contains(id) {
             webQuota[id] = state
         }
+    }
+
+    // MARK: Notifications
+
+    /// Builds what `QuotaAlerts` needs from the current state.
+    func alertInputs() -> [QuotaAlerts.Input] {
+        enabledAccounts.map { account in
+            let name = catalog.info(for: account.providerID)?.displayName ?? account.providerID
+            let windows = quotaWindows(for: account).windows
+            if catalog.capabilities(of: account.providerID)?.onlineQuota == .webSession {
+                let state = webQuota[account.id]
+                let problem = state?.failure.flatMap { $0.needsSignIn ? $0.message : nil }
+                return QuotaAlerts.Input(account: account, providerName: name, windows: windows,
+                                         signInProblem: problem, isKnown: state != nil)
+            }
+            let result = quota[account.id]
+            return QuotaAlerts.Input(account: account, providerName: name, windows: windows,
+                                     signInProblem: QuotaAlerts.signInProblem(for: result?.issue), isKnown: result != nil)
+        }
+    }
+
+    /// Shows notifications that became due and remembers them (in the config) so they are not repeated.
+    private func evaluateAlerts() {
+        guard !isDemo else { return }
+        let plan = QuotaAlerts.plan(inputs: alertInputs(), settings: config.settings, ledger: config.alertLedger,
+                                    existingAccountIDs: Set(config.accounts.map(\.id)), now: Date())
+        if plan.ledger != config.alertLedger {
+            config.alertLedger = plan.ledger
+            commit(refresh: false)
+        }
+        deliverAlerts?(plan.alerts)
+    }
+
+    /// Example notifications built from the current (demo) data with an empty memory, for checking how
+    /// they look (`--sample-notifications`).
+    func sampleAlerts() -> [PendingAlert] {
+        var settings = config.settings
+        settings.quotaAlertThreshold = settings.quotaAlertThreshold ?? AppSettings.defaultQuotaAlertThreshold
+        settings.signInAlertsEnabled = true
+        return QuotaAlerts.plan(inputs: alertInputs(), settings: settings, ledger: [],
+                                existingAccountIDs: Set(config.accounts.map(\.id)), now: Date()).alerts
     }
 
     func refreshIfStale(olderThan seconds: TimeInterval = 15) {

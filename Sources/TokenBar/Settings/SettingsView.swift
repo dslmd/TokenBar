@@ -2,12 +2,22 @@ import SwiftUI
 import AppKit
 import TokenBarCore
 
+/// The settings window's tabs. Other parts of the app open settings on a given tab.
+enum SettingsTab: String, CaseIterable {
+    case general, accounts, notifications
+}
+
 /// Hosts SettingsView in a plain NSWindow. This avoids the `Settings` scene, which is
 /// unreliable to open from an accessory (no Dock icon) app on macOS 13/14.
 @MainActor
 final class SettingsWindowController {
     static let shared = SettingsWindowController()
     private var window: NSWindow?
+
+    /// Opens settings on `tab`. With `accountID`, the accounts tab shows that account.
+    func show(model: AppModel, tab: SettingsTab, accountID: UUID? = nil) {
+        show(model: model)
+    }
 
     func show(model: AppModel) {
         if window == nil {

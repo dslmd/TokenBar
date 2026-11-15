@@ -38,26 +38,29 @@ struct TokenBarApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
+        // The model is created with the first scene; wait a moment for it.
+        DispatchQueue.main.async {
+            guard let model = AppModel.current else { return }
+            let notifications = NotificationService.shared
+            notifications.refreshAuthorization()
+            model.deliverAlerts = { notifications.deliver($0) }
+            if model.needsOnboarding {
+                OnboardingWindowController.shared.show(model: model)
+            }
+            let arguments = CommandLine.arguments
+            if arguments.contains("--onboarding") {
+                OnboardingWindowController.shared.show(model: model)
+            }
+            // Development aid: shows example notifications built from the current data
+            // (works from the app bundle only, e.g. open build/TokenBar.app --args --demo --sample-notifications).
+            if arguments.contains("--sample-notifications") {
+                notifications.requestAuthorization { _ in notifications.deliver(model.sampleAlerts()) }
+            }
+        }
     }
 
     /// Sign-ins still running would leave CLI processes behind; stop them before quitting.
     func applicationWillTerminate(_ notification: Notification) {
         AppModel.current?.prepareForTermination()
-    }
-}
-
-/// Template SF Symbol (adapts to the menu bar appearance) plus an optional number.
-/// The symbol switches to a warning triangle when any quota window is above 90 %.
-struct MenuBarLabel: View {
-    @ObservedObject var model: AppModel
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: model.menuBarSymbol)
-            if model.settings.menuBarShowsNumber {
-                Text(model.menuBarTitle).monospacedDigit()
-            }
-        }
-        .accessibilityLabel(model.menuBarWarning ? "TokenBar, quota almost used up, \(model.menuBarTitle)" : "TokenBar, \(model.menuBarTitle)")
     }
 }

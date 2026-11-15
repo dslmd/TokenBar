@@ -22,31 +22,17 @@ enum SnapshotRunner {
         var collapsed: String = ""
         /// Tab to select in the first `NSTabView` found (settings).
         var tabIndex: Int?
+        /// Measure the view as the MenuBarExtra window measures its content (see `capture`). Use for
+        /// everything shown in the menu bar window.
+        var menuBarWindow: Bool = false
+        /// Changes to the scenario's data for this shot only (e.g. a setting or one account's state).
+        var tweak: ((inout DemoState) -> Void)?
         let content: () -> AnyView
-        /// Measured as the MenuBarExtra window measures its content (see `capture`).
-        var sizesLikeMenuBarWindow: Bool { name.hasPrefix("popover") }
     }
 
+    /// Each part of the UI lists its own shots in Sources/TokenBar/Snapshots/.
     static var shots: [Shot] {
-        let popover: () -> AnyView = { AnyView(PopoverView()) }
-        let settings: () -> AnyView = { AnyView(SettingsView()) }
-        let menuBar: () -> AnyView = { AnyView(MenuBarSnapshot()) }
-        return [
-            Shot(name: "popover-rich", scenario: .rich, content: popover),
-            Shot(name: "popover-rich-collapsed", scenario: .rich, collapsed: "claude,codex", content: popover),
-            Shot(name: "popover-sparse", scenario: .sparse, content: popover),
-            Shot(name: "popover-empty", scenario: .empty, content: popover),
-            Shot(name: "popover-scanning", scenario: .scanning, content: popover),
-            Shot(name: "popover-all-off", scenario: .allOff, content: popover),
-            Shot(name: "popover-loading", scenario: .loading, content: popover),
-            Shot(name: "settings-accounts-rich", scenario: .rich, content: settings),
-            Shot(name: "settings-accounts-signing-in", scenario: .signingIn, content: settings),
-            Shot(name: "settings-accounts-empty", scenario: .empty, content: settings),
-            Shot(name: "settings-general-rich", scenario: .rich, tabIndex: 1, content: settings),
-            Shot(name: "menubar-rich", scenario: .rich, content: menuBar),
-            Shot(name: "menubar-sparse", scenario: .sparse, content: menuBar),
-            Shot(name: "menubar-empty", scenario: .empty, content: menuBar),
-        ]
+        PopoverShots.all + SettingsShots.all + OnboardingShots.all
     }
 
     static func run(outputDirectory: String, arguments: [String]) -> Int32 {
@@ -136,7 +122,9 @@ enum SnapshotRunner {
         UserDefaults.standard.setVolatileDomain(["collapsedProviders": shot.collapsed], forName: UserDefaults.argumentDomain)
         NSApp.appearance = appearance
 
-        let model = AppModel(demo: shot.scenario.state(now: now, home: NSHomeDirectory()))
+        var state = shot.scenario.state(now: now, home: NSHomeDirectory())
+        shot.tweak?(&state)
+        let model = AppModel(demo: state)
         let root = shot.content()
             .environmentObject(model)
             .background(Color(nsColor: .windowBackgroundColor))
@@ -147,7 +135,7 @@ enum SnapshotRunner {
         host.layoutSubtreeIfNeeded()
         var ideal = host.intrinsicContentSize
         if ideal.width < 1 || ideal.height < 1 { ideal = host.fittingSize }
-        if shot.sizesLikeMenuBarWindow {
+        if shot.menuBarWindow {
             // The menu bar window ends up at the size the view takes when offered no room at all (seen on
             // macOS 27), not at its ideal size. Measure the same way, so a view that collapses there
             // collapses here too.
@@ -296,16 +284,4 @@ private final class SnapshotWindow: NSWindow {
     override var isMainWindow: Bool { true }
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
-}
-
-/// The menu bar label on a plain strip, at the menu bar's text size.
-private struct MenuBarSnapshot: View {
-    @EnvironmentObject var model: AppModel
-
-    var body: some View {
-        MenuBarLabel(model: model)
-            .font(.system(size: 13))
-            .padding(.horizontal, 10)
-            .frame(height: 24)
-    }
 }
