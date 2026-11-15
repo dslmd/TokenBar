@@ -124,10 +124,9 @@ struct LoginProviderSpec: Sendable {
                nonEmpty(oauth["accessToken"]) {
                 return true
             }
-            if let config = json(".claude.json"), let account = config["oauthAccount"] as? [String: Any],
-               nonEmpty(account["accountUuid"]) || nonEmpty(account["emailAddress"]) {
-                return true
-            }
+            // `.claude.json` gets its oauthAccount before the tokens are saved, so it is not a signal: finishing
+            // on it stopped claude before it wrote the credentials (seen on a real Mac). Success comes from the
+            // saved credentials or from claude exiting normally (trustsExitZero).
             if let probe = keychainProbe {
                 return probe(CLILoginDriver.claudeKeychainService(forConfigDirectory: home))
             }

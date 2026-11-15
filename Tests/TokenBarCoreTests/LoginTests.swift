@@ -378,7 +378,8 @@ final class LoginTests: XCTestCase {
     }
 
     func testClaudeFileAndKeychainSignals() async throws {
-        // .claude.json with an oauthAccount counts.
+        // .claude.json with an oauthAccount does not finish the sign-in while claude is still running (it is
+        // written before the tokens are saved); claude exiting normally does.
         do {
             let h = try Harness()
             _ = h.start("claude")
@@ -390,6 +391,11 @@ final class LoginTests: XCTestCase {
             await h.waitForSleep()
             XCTAssertTrue(h.recorder.terminalPhases.isEmpty)
             try #"{"oauthAccount":{"accountUuid":"u","emailAddress":"e@x"}}"#.write(toFile: dir + "/.claude.json", atomically: true, encoding: .utf8)
+            await h.tick()
+            await h.tick(10)
+            await h.waitForSleep()
+            XCTAssertTrue(h.recorder.terminalPhases.isEmpty, "account info alone must not stop claude before it saves the tokens")
+            XCTAssertFalse(child.terminated)
             child.exit(0)
             await h.tick()
             await waitUntil { !h.recorder.terminalPhases.isEmpty }
