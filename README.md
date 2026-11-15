@@ -7,15 +7,26 @@ macOS 菜单栏小工具，查看 Codex、Claude Code、Gemini CLI、Muse Code�
 - token 统计完全来自本地日志（只读，不联网）
 - 额度（5 小时 / 每周等）：Codex、Claude Code、Gemini CLI 支持**在线额度**（见下文“联网说明”），Codex 另有本地日志中的额度作为备用
 - Muse（muse.ai，私人助理）：在 TokenBar 内登录后显示每周额度、套餐、剩余 token 与加购额度（非官方，见下文“Muse（muse.ai）”）
-- 菜单栏：图标 + 紧凑数字（如 `1.2M`），任一额度超过 90% 时图标变为警告标志；可只显示图标
-- 弹窗：按提供方（可折叠，顺序为 Claude Code、Codex、Gemini CLI、Muse、Muse Code）、账户显示 今日大数字、近 7 天、本月、输入/输出/缓存占比、7 天柱状图、额度条与重置倒计时；Muse 账户只有套餐、每周额度条与重置倒计时、剩余 token 和加购额度
+- 菜单栏：图标 + 紧凑数字（今日 token，如 `1.2M`；或改为显示最高额度，如 `93%`），任一账户的额度达到 90% 时图标变为警告标志；可只显示图标
+- 弹窗：顶部是今日 token 总数和最紧张的一项额度；下面按提供方（Claude Code、Codex、Gemini CLI、Muse、Muse Code）列出账户，每行一条额度条（75% 起变橙，90% 起变红）；点进账户看额度窗口、近 7 天柱状图、今日输入/输出/缓存构成、今日/近 7 天/本月
+- 首次启动有三页引导（欢迎、找到的账户、提醒设置）；设置分 General、Accounts、Notifications 三页
+- 通知：额度超过阈值（默认 90%，可选 75/90/95 或关闭）时每个周期提醒一次；登录失效时提醒一次（需要在系统设置里允许通知）
+- 在线额度读到后会缓存在本地，CLI 的登录等待自动续期时、以及重启后仍显示上次读数
 - 增量解析（记住每个文件的读取偏移），在后台线程运行；默认每 60 秒刷新
+
+## 下载
+
+在 GitHub 的 Releases 页面下载 `TokenBar-<版本>.zip`，解压后把 TokenBar.app 拖进“应用程序”。同时支持 Apple 芯片和 Intel。
+应用只做了 ad-hoc 签名、没有公证，第一次打开时右键 TokenBar.app → 打开（或在“系统设置 → 隐私与安全性”里点“仍要打开”）。
 
 ## 构建与运行（需要 macOS 13+ 与 Xcode 14.1+ / Swift 5.7+）
 
 ```bash
-scripts/build-app.sh            # 生成 build/TokenBar.app（Release，自动生成图标，ad-hoc 签名，LSUIElement）
-scripts/build-app.sh --install  # 同时复制到 /Applications（不带参数时会询问）
+scripts/build-app.sh               # 生成 build/TokenBar.app（Release，自动生成图标，ad-hoc 签名，LSUIElement）
+scripts/build-app.sh --install     # 同时复制到 /Applications（不带参数时会询问）
+scripts/build-app.sh --universal   # 同时支持 Apple 芯片和 Intel（发布用）
+scripts/snapshot.sh                # 用演示数据把界面渲染成 PNG（浅色和深色），输出到 build/snapshots/
+scripts/dev-run.sh --demo          # 用演示数据运行
 open build/TokenBar.app
 ```
 
