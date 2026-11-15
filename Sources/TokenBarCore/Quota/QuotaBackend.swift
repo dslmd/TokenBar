@@ -29,15 +29,15 @@ public enum QuotaIssue: Error, Equatable, Sendable {
 
     public var message: String {
         switch self {
-        case .disabled: return "Online quota is off"
-        case .unsupported: return "Online quota is not available for this provider"
-        case .notSignedIn: return "No sign-in found"
-        case .loginExpired(let cli): return "Sign-in expired. Run \(cli) once to renew it"
-        case .cannotWriteBack(let cli): return "Can't renew the sign-in safely. Run \(cli) once to renew it"
-        case .accessDenied: return "No permission to read the sign-in"
-        case .network: return "Network unavailable, will retry"
-        case .server(let code): return "Quota service error (\(code))"
-        case .other: return "Couldn't load online quota"
+        case .disabled: return "Online quota is off."
+        case .unsupported: return "Online quota is not available for this provider."
+        case .notSignedIn: return "No sign-in found."
+        case .loginExpired(let cli): return "Sign-in expired. Run \(cli) once to renew it."
+        case .cannotWriteBack(let cli): return "Can't renew the sign-in safely. Run \(cli) once to renew it."
+        case .accessDenied: return "No permission to read the sign-in."
+        case .network: return "Network unavailable, will retry."
+        case .server(let code): return "Quota service error (\(code))."
+        case .other: return "Couldn't load online quota."
         }
     }
 }

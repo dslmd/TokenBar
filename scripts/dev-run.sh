@@ -2,6 +2,7 @@
 # Builds a debug build, stops any running TokenBar and starts the fresh one.
 #
 # Usage: scripts/dev-run.sh [--demo [scenario]]
+#   --onboarding / --settings [general|accounts|notifications]   also open that window (for checks)
 #   --demo [scenario]   run the real menu bar app on demo data instead of your accounts: nothing is
 #                       read from disk, the Keychain or the network, and nothing is saved.
 #                       Scenarios: rich (default), signingIn, sparse, empty, scanning, allOff, loading

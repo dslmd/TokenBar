@@ -18,11 +18,11 @@ public enum MuseAIFailure: Error, Equatable, Sendable, CustomStringConvertible {
     /// Short sentence for the UI.
     public var message: String {
         switch self {
-        case .signedOut: return "Not signed in to Muse"
-        case .sessionExpired: return "Muse session expired. Sign in again"
-        case .siteChanged: return "muse.ai changed and usage could not be read"
-        case .network: return "Network unavailable, will retry later"
-        case .server(let code): return "muse.ai returned an error (\(code))"
+        case .signedOut: return "Not signed in to Muse."
+        case .sessionExpired: return "Muse session expired. Sign in again."
+        case .siteChanged: return "muse.ai changed and usage could not be read."
+        case .network: return "Network unavailable, will retry later."
+        case .server(let code): return "muse.ai returned an error (\(code))."
         }
     }
 

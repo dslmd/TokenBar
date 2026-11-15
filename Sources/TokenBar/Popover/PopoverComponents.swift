@@ -12,6 +12,15 @@ enum PopoverStyle {
     static let hoverFill = Color.primary.opacity(0.08)
     static let pressedFill = Color.primary.opacity(0.12)
     static let trackFill = Color.primary.opacity(0.1)
+    /// A lighter accent for secondary data (earlier days in the chart, output tokens). A plain accent with
+    /// opacity turns into a dark navy on dark backgrounds, so dark mode mixes the accent with white instead.
+    static let secondaryAccent = Color(nsColor: NSColor(name: nil) { appearance in
+        let accent = NSColor.controlAccentColor
+        if appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua {
+            return accent.blended(withFraction: 0.35, of: .white)?.withAlphaComponent(0.55) ?? accent
+        }
+        return accent.withAlphaComponent(0.4)
+    })
     /// How often relative times ("2 min ago") are worked out again while the window is open.
     static let clockInterval: TimeInterval = 30
 
@@ -233,7 +242,7 @@ struct SplitBar: View {
 
     private var parts: [(name: String, value: Int, color: Color)] {
         [("Input", tokens.input, Color.accentColor),
-         ("Output", tokens.output, Color.accentColor.opacity(0.5)),
+         ("Output", tokens.output, PopoverStyle.secondaryAccent),
          ("Cache", tokens.cache, Color.primary.opacity(0.22))]
     }
 
@@ -290,7 +299,7 @@ struct DailyBars: View {
                     ZStack(alignment: .bottom) {
                         Color.clear.frame(height: height)
                         RoundedRectangle(cornerRadius: 3, style: .continuous)
-                            .fill(values[index] == 0 ? PopoverStyle.trackFill : Color.accentColor.opacity(isToday ? 1 : 0.35))
+                            .fill(values[index] == 0 ? PopoverStyle.trackFill : (isToday ? Color.accentColor : PopoverStyle.secondaryAccent))
                             .frame(height: max(2, height * CGFloat(values[index]) / CGFloat(peak)))
                             .animation(PopoverStyle.animation(reduceMotion: reduceMotion), value: values[index])
                     }

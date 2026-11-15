@@ -48,8 +48,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 OnboardingWindowController.shared.show(model: model)
             }
             let arguments = CommandLine.arguments
+            // Development aids for checking real windows: --onboarding, --settings [general|accounts|notifications].
             if arguments.contains("--onboarding") {
                 OnboardingWindowController.shared.show(model: model)
+            }
+            if let flag = arguments.firstIndex(of: "--settings") {
+                let name = flag + 1 < arguments.count ? arguments[flag + 1] : ""
+                SettingsWindowController.shared.show(model: model, tab: SettingsTab(rawValue: name) ?? .general)
             }
             // Development aid: shows example notifications built from the current data
             // (works from the app bundle only, e.g. open build/TokenBar.app --args --demo --sample-notifications).

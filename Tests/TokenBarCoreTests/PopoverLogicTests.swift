@@ -151,8 +151,8 @@ final class PopoverLogicTests: XCTestCase {
             lines[account.name + "/" + account.providerID] = AccountRowLine.resolve(input, now: now)
         }
         if case .quota(let s)? = lines["alex@example.com/claude"] { XCTAssertEqual(s.text, "Weekly 93% · resets in 2 days") } else { XCTFail() }
-        XCTAssertEqual(lines["sam.rivera@example.com/claude"], .attention("Sign-in expired. Run claude once to renew it"))
-        XCTAssertEqual(lines["Muse Free/museai"], .attention("Muse session expired. Sign in again"))
+        XCTAssertEqual(lines["sam.rivera@example.com/claude"], .attention("Sign-in expired. Run claude once to renew it."))
+        XCTAssertEqual(lines["Muse Free/museai"], .attention("Muse session expired. Sign in again."))
         if case .lastActive? = lines["Default/muse"] {} else { XCTFail("Muse Code shows when it was last active") }
     }
 
@@ -225,11 +225,11 @@ final class PopoverLogicTests: XCTestCase {
     // MARK: More texts
 
     func testHeroTokensKeepOneDecimal() {
-        XCTAssertEqual(PopoverText.heroTokens(1_996_000), "2.0M")
+        XCTAssertEqual(PopoverText.heroTokens(1_996_000), "2M")
         XCTAssertEqual(PopoverText.heroTokens(1_540_000), "1.5M")
         XCTAssertEqual(PopoverText.heroTokens(9_800), "9.8K")
         XCTAssertEqual(PopoverText.heroTokens(12_400_000), "12M")
-        XCTAssertEqual(PopoverText.heroTokens(999_700), "1.0M")
+        XCTAssertEqual(PopoverText.heroTokens(999_700), "1M")
         XCTAssertEqual(PopoverText.heroTokens(842), "842")
         XCTAssertEqual(PopoverText.heroTokens(0), "0")
     }

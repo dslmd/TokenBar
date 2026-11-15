@@ -224,20 +224,10 @@ public enum PopoverText {
         return String(text.dropLast(suffix.count)) + " left"
     }
 
-    /// The hero number of the overview: like `TokenFormatter.compact` but keeps one decimal below 10 of a
-    /// unit ("2.0M", not "2M"), so it reads as precisely as the section totals under it.
+    /// The hero number of the overview.
     public static func heroTokens(_ n: Int) -> String {
-        let v = Double(abs(n))
-        let sign = n < 0 ? "-" : ""
-        func fmt(_ x: Double, _ suffix: String) -> String {
-            sign + String(format: x >= 9.95 ? "%.0f" : "%.1f", x) + suffix
-        }
-        switch v {
-        case 999_500_000...: return fmt(v / 1_000_000_000, "B")
-        case 999_500...: return fmt(v / 1_000_000, "M")
-        case 1_000...: return fmt(v / 1_000, "K")
-        default: return "\(n)"
-        }
+        // Same format as the menu bar and the rows, so the numbers always agree.
+        TokenFormatter.compact(n)
     }
 
     /// "A", "A and B", "A, B and C".

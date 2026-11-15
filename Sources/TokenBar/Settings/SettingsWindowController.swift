@@ -117,6 +117,9 @@ final class SettingsTabViewController: NSTabViewController {
 
     private let order = SettingsTab.allCases
 
+    /// Each tab's root view, kept to measure its height (see `updateSizes`).
+    private var roots: [SettingsTab: AnyView] = [:]
+
     init(model: AppModel, navigation: SettingsNavigation) {
         super.init(nibName: nil, bundle: nil)
         tabStyle = .toolbar
@@ -127,6 +130,7 @@ final class SettingsTabViewController: NSTabViewController {
                 DispatchQueue.main.async { self?.fitWindow(animated: true) }
             }
                 .environmentObject(model)
+            roots[tab] = AnyView(root)
             let host = NSHostingController(rootView: AnyView(root))
             // The window size is set here, not by SwiftUI, so switching tabs animates once.
             host.sizingOptions = []
@@ -156,10 +160,14 @@ final class SettingsTabViewController: NSTabViewController {
 
     /// Each tab's preferred size: fixed width, the content's ideal height within limits.
     private func updateSizes() {
-        for item in tabViewItems {
-            guard let host = item.viewController as? NSHostingController<AnyView> else { continue }
-            let ideal = host.sizeThatFits(in: CGSize(width: Self.contentWidth, height: .infinity))
-            let height = SettingsRules.windowContentHeight(ideal: Double(ideal.height))
+        for (index, item) in tabViewItems.enumerated() {
+            guard let host = item.viewController as? NSHostingController<AnyView>,
+                  index < order.count, let root = roots[order[index]] else { continue }
+            // A grouped Form scrolls, so sizeThatFits reports far less than its content. A throwaway hosting
+            // view's intrinsic size is the full content height (the same measurement the snapshots use).
+            let probe = NSHostingView(rootView: root)
+            probe.layoutSubtreeIfNeeded()
+            let height = SettingsRules.windowContentHeight(ideal: Double(probe.intrinsicContentSize.height))
             host.preferredContentSize = NSSize(width: Self.contentWidth, height: CGFloat(height))
         }
     }

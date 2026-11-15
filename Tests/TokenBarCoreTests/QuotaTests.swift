@@ -314,7 +314,7 @@ final class QuotaTests: XCTestCase {
     func testIssueMessagesNeverContainTokens() {
         let issues: [QuotaIssue] = [.loginExpired(cli: "claude"), .cannotWriteBack(cli: "gemini"), .network, .server(500), .accessDenied, .other]
         for i in issues { XCTAssertFalse(i.message.contains("AT-")) }
-        XCTAssertEqual(QuotaIssue.loginExpired(cli: "codex").message, "Sign-in expired. Run codex once to renew it")
+        XCTAssertEqual(QuotaIssue.loginExpired(cli: "codex").message, "Sign-in expired. Run codex once to renew it.")
     }
 
     // MARK: Codex (CLI owns the refresh chain)
