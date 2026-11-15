@@ -2,8 +2,10 @@
 # Builds TokenBar in release mode on macOS and wraps it into build/TokenBar.app
 # (LSUIElement menu bar app, generated icon, ad-hoc code signed).
 #
-# Usage: scripts/build-app.sh [--install] [version]
-#   --install   copy the app to /Applications without asking
+# Usage: scripts/build-app.sh [--install|--no-install] [--universal] [version]
+#   --install     copy the app to /Applications without asking
+#   --no-install  never ask about /Applications
+#   --universal   build for Apple silicon and Intel (for releases)
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -12,11 +14,13 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
 fi
 
 INSTALL=ask
-VERSION="0.3.0"
+VERSION="1.0.0"
+ARCH_ARGS=()
 for arg in "$@"; do
   case "$arg" in
     --install) INSTALL=yes ;;
     --no-install) INSTALL=no ;;
+    --universal) ARCH_ARGS=(--arch arm64 --arch x86_64) ;;
     *) VERSION="$arg" ;;
   esac
 done
@@ -24,8 +28,8 @@ done
 cd "$(dirname "$0")/.."
 APP="build/TokenBar.app"
 
-swift build -c release --product TokenBar
-BIN_DIR="$(swift build -c release --show-bin-path)"
+swift build -c release --product TokenBar ${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"}
+BIN_DIR="$(swift build -c release ${ARCH_ARGS[@]+"${ARCH_ARGS[@]}"} --show-bin-path)"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
