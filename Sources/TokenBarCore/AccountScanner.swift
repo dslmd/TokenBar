@@ -36,6 +36,11 @@ final class AccountScanner {
         let existingRoots = roots.filter { isDirectory($0) }
         if existingRoots.isEmpty {
             files.removeAll()
+            // A profile that exists but was never used (e.g. just signed in from TokenBar) has no log folder
+            // yet: that is "no usage", not a missing account folder.
+            if isDirectory(URL(fileURLWithPath: expandPath(account.dataPath))) {
+                return aggregate(now: now, periods: periods)
+            }
             return AccountUsage(updatedAt: now, status: .dataDirectoryMissing)
         }
 

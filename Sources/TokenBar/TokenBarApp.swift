@@ -10,6 +10,11 @@ enum TokenBarMain {
     @MainActor
     static func main() {
         let arguments = CommandLine.arguments
+        // Development aid: prints how reading usage from muse.ai goes for each Muse account, structure only
+        // (statuses, matched patterns, key names). Never prints cookies or response values.
+        if arguments.contains("--diagnose-muse") {
+            exit(MuseDiagnosticsRunner.run())
+        }
         if let flag = arguments.firstIndex(of: "--snapshot") {
             let directory = flag + 1 < arguments.count ? arguments[flag + 1] : "snapshots"
             exit(SnapshotRunner.run(outputDirectory: directory, arguments: arguments))
@@ -67,5 +72,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Sign-ins still running would leave CLI processes behind; stop them before quitting.
     func applicationWillTerminate(_ notification: Notification) {
         AppModel.current?.prepareForTermination()
+    }
+}
+
+@MainActor
+enum MuseDiagnosticsRunner {
+    static func run() -> Int32 {
+        guard let config = ConfigStore().load() else { print("No TokenBar config found."); return 1 }
+        let museAccounts = config.accounts.filter { $0.providerID == ProviderCatalog.museAIID }
+        if museAccounts.isEmpty { print("No Muse accounts."); return 1 }
+        let secrets = KeychainSecretStore()
+        let cached = MuseAIUserDefaultsStore().string(forKey: MuseAIFetcher.actionIDKey)
+        var done = false
+        Task {
+            for account in museAccounts {
+                print("== Muse account \(account.id.uuidString.prefix(8))")
+                guard let secret = secrets.secret(for: account.id), let cookies = MuseAICookieSet(serialized: secret) else {
+                    print("no stored session"); continue
+                }
+                for line in await MuseAIDiagnostics.run(cookies: cookies, cachedActionID: cached) { print(line) }
+            }
+            done = true
+        }
+        while !done { RunLoop.main.run(until: Date().addingTimeInterval(0.1)) }
+        return 0
     }
 }

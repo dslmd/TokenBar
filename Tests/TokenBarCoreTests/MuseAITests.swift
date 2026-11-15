@@ -137,6 +137,20 @@ final class MuseAIFetcherTests: XCTestCase {
         XCTAssertEqual(paid.topUp?.usedFraction, 0)
     }
 
+    /// muse.ai serves its scripts from `static/immutable/chunks/` (seen November 2026) as well as the older
+    /// `static/chunks/`; both are found, in order and without duplicates, and nothing else is.
+    func testChunkPathsAcceptImmutableDirectory() {
+        let html = #"<script src="/_next/static/immutable/chunks/04d5giu9rtvpf.js"></script>"#
+            + #"<script src="/_next/static/chunks/main-app.js"></script>"#
+            + #"<script src="/_next/static/immutable/chunks/04d5giu9rtvpf.js"></script>"#
+            + #"<link href="/_next/static/css/app.css"><script src="/_next/static/a/b/chunks/x.js"></script>"#
+        XCTAssertEqual(MuseAIDiscovery.chunkPaths(in: html),
+                       ["/_next/static/immutable/chunks/04d5giu9rtvpf.js", "/_next/static/chunks/main-app.js"])
+        // The settings loader lists files without the /_next/ prefix.
+        XCTAssertEqual(MuseAIDiscovery.chunkPaths(in: #""static/immutable/chunks/0l3dsgtys_rhp.js""#),
+                       ["/_next/static/immutable/chunks/0l3dsgtys_rhp.js"])
+    }
+
     func testDiscoveryWithoutCachedIDStoresID() async throws {
         let site = MuseFakeSite()
         let store = cached(nil)

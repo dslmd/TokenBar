@@ -78,6 +78,12 @@ final class ProviderTests: XCTestCase {
         XCTAssertEqual(m.status, .dataDirectoryMissing)
         XCTAssertEqual(m.today, .zero)
 
+        // A fresh profile folder without any log folder yet (just signed in): no usage, not "missing".
+        let fresh = try TestSupport.tempDir()
+        let f = await TestSupport.usage(provider: "claude", path: fresh)
+        XCTAssertEqual(f.status, .noRecentData)
+        XCTAssertEqual(f.today, .zero)
+
         let empty = try TestSupport.tempDir()
         try FileManager.default.createDirectory(at: empty.appendingPathComponent("projects"), withIntermediateDirectories: true)
         let e = await TestSupport.usage(provider: "claude", path: empty)

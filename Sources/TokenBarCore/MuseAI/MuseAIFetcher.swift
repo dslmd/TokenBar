@@ -214,11 +214,13 @@ public struct MuseAIFetcher: Sendable {
 
 /// Text patterns used to rediscover the action id. Each mirrors a regular expression in museai.js.
 enum MuseAIDiscovery {
-    /// `/static\/chunks\/[\w~.-]+\.js/g` mapped to `/_next/<match>`, de-duplicated in order (line 39).
+    /// `static/chunks/<name>.js` mapped to `/_next/<match>`, de-duplicated in order (museai.js line 39).
+    /// muse.ai now also serves `static/immutable/chunks/<name>.js` (seen November 2026), so one optional
+    /// directory between `static/` and `chunks/` is accepted.
     static func chunkPaths(in text: String) -> [String] {
         var seen = Set<String>()
         var out: [String] = []
-        for m in MuseAIRegex.matches(#"static/chunks/[A-Za-z0-9_~.\-]+\.js"#, in: text) {
+        for m in MuseAIRegex.matches(#"static/(?:[a-z]+/)?chunks/[A-Za-z0-9_~.\-]+\.js"#, in: text) {
             let p = "/_next/" + m
             if seen.insert(p).inserted { out.append(p) }
         }
